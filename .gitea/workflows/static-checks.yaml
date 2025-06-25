@@ -1,0 +1,29 @@
+name: Check for High Vulnerabilities
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  snyk_scan:
+    name: Snyk Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
+      run: |
+        apt update
+        apt install -y npm
+        npm install -g snyk
+
+    - name: Snyk auth
+      run: |
+        snyk auth ${{ secrets.SNYK_TOKEN }}
+
+    - name: Snyk SAST
+      run: |
+        snyk code test --severity-threshold=high 

@@ -1,0 +1,195 @@
+/* General Body Styling */
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+}
+
+/* Title Styling */
+.title {
+    text-align: center;
+    color: #152F56;
+    font-size: 24px;
+    margin-top: 20px;
+}
+
+.user-info {
+    position: absolute;
+    top: 10px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* Spacing between icons and text */
+    z-index: 2;
+    /* Keep it above both video elements */
+}
+
+.user-info i {
+    font-size: 16px;
+    color: #d0bb6e;
+    /* Highlighted icon color */
+}
+
+/* Entry Modal Styling */
+.entry-modal {
+    text-align: center;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+}
+
+.room-input {
+    margin: 10px;
+    padding: 10px;
+    font-size: 16px;
+    width: 80%;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+.barton button {
+    margin: 10px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #2980b9;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.barton button:hover {
+    background-color: #3498db;
+}
+
+/* Meet Area */
+.meet-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+    background-color: #f4f4f4;
+}
+
+/* Remote Video (Doctor's Video) */
+#remote-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    /*transform: scaleX(1);*/
+    object-fit: cover;
+    z-index: 0;
+    /* Behind everything else */
+}
+
+/* Local Video (Patient's Video) */
+/* Controls Bar - Positioned at the Bottom */
+#local-video {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 20%;
+    top: 30rem;
+    max-width: 200px;
+    transform: scaleX(1);
+    border: 2px solid #16a085;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    /* Above the remote video */
+}
+
+
+
+
+.controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    z-index: 2;
+    /* Above the videos */
+}
+
+/* Control Buttons */
+.controls button {
+    background-color: #2980b9;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+}
+
+/* Hover Effect on Buttons */
+.controls button:hover {
+    background-color: #3498db;
+}
+
+/* Specific Button Colors */
+.controls button.end-call {
+    background-color: #e74c3c;
+}
+
+.controls button.end-call:hover {
+    background-color: #c0392b;
+}
+
+/* Icons Styling */
+.controls button i {
+    font-size: 30px;
+    /* Larger icons */
+}
+
+/* Styling for Screen , start-recording, stop-recording, and End Call icons */
+.controls button.screen-share {
+    background-color: #2ecc71;
+}
+
+.controls button.screen-share:hover {
+    background-color: #27ae60;
+}
+
+.controls button.end-call {
+    background-color: #e74c3c;
+}
+
+.controls button.end-call:hover {
+    background-color: #c0392b;
+}
+
+.controls button.start-recording {
+    background-color: #32a315;
+}
+
+.controls button.stop-recording {
+    background-color: #c02b8e;
+}
