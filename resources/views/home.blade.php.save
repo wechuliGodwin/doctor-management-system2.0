@@ -1,0 +1,272 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="relative">
+   <!-- Slideshow Section -->
+   <div class="relative w-full h-screen overflow-hidden">
+       <!-- Slider container -->
+       <div id="slider" class="relative w-full h-full">
+           <!-- Slide 1 -->
+           <div class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-in-out" style="background-image: url('https://kijabehospital.or.ke/image/slider3.jpg');">
+               <div class="absolute inset-0 flex items-center justify-center">
+                   <div class="text-center">
+                       <h1 class="text-5xl font-bold mb-4 text-white text-shadow-dark">Welcome to AIC Kijabe Hospital</h1>
+                       <p class="text-xl mb-8 text-white text-shadow-dark">Providing compassionate care with excellence</p>
+                       <a href="#" class="bg-[#159ed5] hover:bg-[#1386b5] text-white font-bold py-2 px-4 rounded transition duration-300">Learn More</a>
+                   </div>
+               </div>
+           </div>
+	   <!-- Slide 2 -->
+<div class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-in-out" style="background-image: url('https://kijabehospital.or.ke/image/telemedicine.jpeg');">
+               <div class="absolute inset-0 flex items-center justify-center">
+                   <div class="text-center">
+                       <h1 class="text-5xl font-bold mb-4 text-white text-shadow-dark">Telemedicine Services</h1>
+                       <p class="text-xl mb-8 text-white text-shadow-dark">Consult with our doctors from the comfort of your home</p>
+                       <a href="/telemedicine-patient" class="bg-[#159ed5] hover:bg-[#1386b5] text-white font-bold py-2 px-4 rounded transition duration-300">Register now</a>
+                   </div>
+               </div>
+           </div>
+
+
+
+
+     <div class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ease-in-out" style="background-image: url('https://kijabehospital.or.ke/image/westie.jpg');">
+               <div class="absolute inset-0 flex items-center justify-center">
+                   <div class="text-center">
+                       <h1 class="text-5xl font-bold mb-4 text-white text-shadow-dark">State-of-the-Art Facilities</h1>
+                       <p class="text-xl mb-8 text-white text-shadow-dark">Equipped to handle complex medical procedures</p>
+                       <a href="#" class="bg-[#159ed5] hover:bg-[#1386b5] text-white font-bold py-2 px-4 rounded transition duration-300">Learn More</a>
+                   </div>
+               </div>
+           </div>
+           <!-- Slide 3 -->
+           <div class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat opacity-0 transition-opacity duration-1000 ease-in-out" style="background-image: url('https://kijabehospital.or.ke/image/s2.jpg');">
+               <div class="absolute inset-0 flex items-center justify-center">
+                   <div class="text-center">
+                       <h2 class="text-4xl font-bold mb-4 text-white text-shadow-dark">Dedicated Healthcare Professionals</h2>
+                       <p class="text-xl mb-8 text-white text-shadow-dark">Committed to your health and well-being</p>
+                       <a href="#" class="bg-[#159ed5] hover:bg-[#1386b5] text-white font-bold py-2 px-4 rounded transition duration-300">Meet Our Team</a>
+                   </div>
+               </div>
+           </div>
+       </div>
+       <!-- Navigation arrows -->
+       <button id="prevBtn" class="absolute top-1/2 left-4 transform -translate-y-1/2 bg-white bg-opacity-50 hover:bg-opacity-75 rounded-full p-2 transition duration-300">
+           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+       </button>
+       <button id="nextBtn" class="absolute top-1/2 right-4 transform -translate-y-1/2 bg-white bg-opacity-50 hover:bg-opacity-75 rounded-full p-2 transition duration-300">
+           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+       </button>
+   </div>
+
+   <style>
+       .text-shadow-dark {
+           text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+       }
+       .text-shadow-light {
+           text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.5);
+       }
+   </style>
+
+   <script type="text/javascript">
+       document.addEventListener('DOMContentLoaded', function() {
+           const slider = document.getElementById('slider');
+           const slides = slider.children;
+           const prevBtn = document.getElementById('prevBtn');
+           const nextBtn = document.getElementById('nextBtn');
+           let currentSlide = 0;
+
+           function showSlide(index) {
+               for (let i = 0; i < slides.length; i++) {
+                   if (i === index) {
+                       slides[i].classList.remove('opacity-0');
+                       slides[i].classList.add('opacity-100');
+                   } else {
+                       slides[i].classList.remove('opacity-100');
+                       slides[i].classList.add('opacity-0');
+                   }
+               }
+           }
+
+           function nextSlide() {
+               currentSlide = (currentSlide + 1) % slides.length;
+               showSlide(currentSlide);
+           }
+
+           function prevSlide() {
+               currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+               showSlide(currentSlide);
+           }
+
+           nextBtn.addEventListener('click', nextSlide);
+           prevBtn.addEventListener('click', prevSlide);
+
+           // Auto-advance slides every 5 seconds
+           setInterval(nextSlide, 5000);
+
+           // Initialize the first slide
+           showSlide(currentSlide);
+       });
+   </script>
+
+
+<!-- Services Section -->
+<div class="py-16 bg-white dark:bg-gray-900">
+    <div class="container mx-auto px-6 text-center">
+        <h2 class="text-3xl font-semibold text-gray-800 dark:text-white mb-8">Our Services</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8" id="visible-services">
+            <!-- First row of services - Always Visible -->
+            <!-- Service 1: General Outpatient -->
+            <div class="service-card p-4">
+                <i class="fas fa-stethoscope h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">General Outpatient</h3>
+            </div>
+
+            <!-- Service 2: Urology -->
+            <div class="service-card p-4">
+                <i class="fas fa-flask h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Urology</h3>
+            </div>
+
+            <!-- Service 3: Orthopaedic -->
+            <div class="service-card p-4">
+                <i class="fas fa-bone h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Orthopaedic</h3>
+            </div>
+
+            <!-- Service 4: Oncology -->
+            <div class="service-card p-4">
+                <i class="fas fa-ribbon h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Oncology</h3>
+            </div>
+
+            <!-- Service 5: Cardiology -->
+            <div class="service-card p-4">
+                <i class="fas fa-heartbeat h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Cardiology</h3>
+            </div>
+
+            <!-- Service 6: Dermatology -->
+            <div class="service-card p-4">
+                <i class="fas fa-user-md h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Dermatology</h3>
+            </div>
+        </div>
+
+        <!-- Additional services - Initially Hidden -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8 mt-8 hidden" id="additional-services">
+            <!-- Service 7: Nephrology -->
+            <div class="service-card p-4">
+                <i class="fas fa-filter h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Nephrology</h3>
+            </div>
+
+            <!-- Service 8: Pulmonology -->
+            <div class="service-card p-4">
+                <i class="fas fa-lungs h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Pulmonology</h3>
+            </div>
+
+            <!-- Service 9: HDU -->
+            <div class="service-card p-4">
+                <i class="fas fa-hospital-alt h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">HDU</h3>
+            </div>
+
+            <!-- Service 10: ICU -->
+            <div class="service-card p-4">
+                <i class="fas fa-heartbeat h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">ICU</h3>
+            </div>
+
+            <!-- Service 11: Medical Ward -->
+            <div class="service-card p-4">
+                <i class="fas fa-bed h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Medical Ward</h3>
+            </div>
+
+            <!-- Service 12: Surgical Ward -->
+            <div class="service-card p-4">
+                <i class="fas fa-syringe h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Surgical Ward</h3>
+            </div>
+
+            <!-- Service 13: Physiotherapy -->
+            <div class="service-card p-4">
+                <i class="fas fa-walking h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Physiotherapy</h3>
+            </div>
+
+            <!-- Service 14: Psychology -->
+            <div class="service-card p-4">
+                <i class="fas fa-brain h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Psychology</h3>
+            </div>
+
+            <!-- Service 15: Pediatrics -->
+            <div class="service-card p-4">
+                <i class="fas fa-baby h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Pediatrics</h3>
+            </div>
+
+            <!-- Service 16: Nutrition -->
+            <div class="service-card p-4">
+                <i class="fas fa-apple-alt h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Nutrition</h3>
+            </div>
+
+            <!-- Service 17: Palliative -->
+            <div class="service-card p-4">
+                <i class="fas fa-hand-holding-heart h-12 w-12 text-[#159ed5] mx-auto mb-2"></i>
+                <h3 class="text-md font-bold text-[#159ed5]">Palliative</h3>
+            </div>
+        </div>
+
+        <!-- Show More Button -->
+        <button onclick="toggleMoreServices()" class="mt-4 bg-[#159ed5] text-white px-4 py-2 rounded">
+            Show More
+        </button>
+    </div>
+</div>
+<!-- JavaScript to Toggle More Services -->
+<script>
+    function toggleMoreServices() {
+        const additionalServices = document.getElementById('additional-services');
+        additionalServices.classList.toggle('hidden');
+
+        const button = document.querySelector('button[onclick="toggleMoreServices()"]');
+        button.textContent = button.textContent === 'Show Less' ? 'Show More' : 'Show Less';
+    }
+</script>
+
+
+    <!-- Call to Action Section -->
+    <div class="py-16 bg-[#159ed5] text-white text-center">
+        <div class="container mx-auto px-6">
+            <h2 class="text-3xl font-semibold mb-4">Compassionate Care for Patients</h2>
+            <p class="text-lg mb-8">We make it easy for patients around the world to receive compassionate care at Kijabe Hospital. Experience this care.</p>
+            <a href="{{ route('booking.show') }}" class="px-8 py-4 bg-white text-[#159ed5] font-semibold rounded-lg shadow-lg hover:bg-gray-100 transition ease-in-out duration-300">
+                Book a Visit
+            </a>
+        </div>
+    </div>
+
+    <!-- News Section -->
+    <div class="py-16 px-6">
+        <h2 class="text-3xl font-semibold text-center text-[#159ed5] mb-8">Recent Kijabe Hospital News</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            @foreach($blogs as $blog)
+                <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <img src="{{ $blog->image }}" alt="{{ $blog->title }}" class="w-full h-48 object-cover rounded-t-lg">
+                    <div class="p-6">
+                        <h3 class="text-xl font-bold text-[#159ed5] mb-4">{{ $blog->title }}</h3>
+                        <p class="text-gray-600 dark:text-gray-300">{{ Str::limit($blog->content, 100) }}</p>
+                        <a href="{{ route('blog.show', $blog->id) }}" class="text-[#159ed5] font-semibold hover:underline">Read More</a>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+</div>
+@endsection
+

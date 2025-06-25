@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Kijabe Telemedicine</title>
+    <!-- Include Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" type="text/css" href="styles.css">
+</head>
+
+<body>
+    <h1 class="title">Kijabe Telemedicine</h1>
+    <p id="notification" hidden></p>
+    <div class="user-info">
+        <i class="fas fa-user"></i>
+        {{ auth()->user()->name }}
+        <i class="fas fa-calendar-alt"></i>
+        Age: 35
+        <i class="fas fa-clock"></i>
+        Duration: 15:23
+    </div>
+
+    <!-- Entry Modal for Meeting -->
+    <div class="entry-modal" id="entry-modal">
+        <p>Join Meeting</p>
+        <input id="room-input" class="room-input"  type="hidden"  placeholder="Enter Room ID">
+        <div class="barton">
+         
+            <button onclick="joinRoom()">Join meeting</button>
+        </div>
+    </div>
+
+    <!-- Meet Area -->
+    <div class="meet-area">
+        <!-- Remote Video Element (Doctor's Video) -->
+        <video id="remote-video" autoplay></video>
+
+        <!-- Local Video Element (Patient's Video) -->
+        <video id="local-video" autoplay muted></video>
+
+        <!-- Controls Bar -->
+        <div class="controls">
+            <button class="screen-share" onclick="startScreenShare()">
+                <i class="fas fa-desktop"></i> <!-- Screen share icon -->
+            </button>
+            <button class="end-call" onclick="endCall()">
+                <i class="fas fa-phone-slash"></i> <!-- End call icon -->
+          
+                <button class="end-call" id="mute-button" onclick="muteCall()">
+                    <i class="fas fa-microphone" id="mute-icon"></i>
+                </button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script src="script.js"></script>
+
+    <script>
+
+ function endCall() {
+        // Perform any actions needed to end the call here
+        console.log("Call ended");
+
+        // Redirect to the dashboard
+        window.location.href = "/dashboard"; // Replace '/dashboard' with the actual URL of your dashboard
+    }
+
+
+document.getElementById("mute-icon").classList.add("fa-microphone-slash");
+document.getElementById("mute-icon").classList.remove("fa-microphone");
+
+
+        // Check if room_id is set and populate the input field
+        const id = {{ $appointments->id ?? 'null' }}; // Use Blade syntax
+        const meeting_id = '{{ addslashes($appointments->meeting_id ?? '') }}'; // Use Blade syntax
+        console.log('Room ID:', id);
+        console.log('Room Name:', meeting_id); // Log room name
+
+        // Populate the input field with the room ID if it exists
+        if (id !== null) {
+            document.getElementById('room-input').value = meeting_id; // Set the input value
+        }
+    </script>
+</body>
+
+</html>
+

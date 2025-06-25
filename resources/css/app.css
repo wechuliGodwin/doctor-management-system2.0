@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.dz-progress {
+    background: green;
+    margin-top: 10px;
+    height: 10px;
+}
+
+.dz-progress .dz-upload {
+    background: #0099ff;
+    display: block;
+    height: 100%;
+    width: 0;
+    transition: width 300ms ease-in-out;
+    text-align: right;
+    padding: 0 5px;
+    line-height: 10px;
+    color: white;
+}
+
+.dz-success-mark {
+    visibility: hidden;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+/* Custom styles for the mega menu */
+.mega-menu {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: none;
+    transition: opacity 0.3s ease;
+    z-index: 20;
+}
+
+.mega-menu.show {
+    display: block;
+}
+
+.mega-menu .grid {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+@media (max-width: 640px) {
+    .mega-menu {
+        width: 100%;
+        position: static;
+        box-shadow: none;
+    }
+}
+
+@media (min-width: 640px) {
+    .mega-menu {
+        width: 600px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+}
+
+
+    /* General styles for the service card */
+    .service-card {
+        min-width: 30%; /* Adjust the width as needed */
+        background-color: #f7f7f7; /* Light background for the card */
+        border-radius: 0.5rem; /* Rounded corners for a softer look */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+        transition: box-shadow 0.3s ease, transform 0.3s ease; /* Smooth transition */
+    }
+
+    /* Hover effects for service cards */
+    .service-card:hover {
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Enhanced shadow on hover */
+        transform: translateY(-5px); /* Slight lift effect */
+    }
+
+    /* Responsive grid settings */
+    .services-grid {
+        display: flex; /* Flexbox for layout */
+        flex-wrap: wrap; /* Allow wrapping of cards */
+        justify-content: center; /* Center content */
+        gap: 1rem; /* Space between cards */
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+        .service-card {
+            min-width: 45%; /* Two cards per row on medium screens */
+        }
+    }
+
+    @media (max-width: 768px) {
+        .service-card {
+            min-width: 100%; /* One card per row on small screens */
+            margin-bottom: 1rem; /* Space at the bottom */
+        }
+    }
+
+    /* Slide in and out animations */
+    .slide-in-right {
+        animation: slide-in-right 0.7s ease-in-out forwards; /* Right slide animation */
+    }
+
+    .slide-out-left {
+        animation: slide-out-left 0.7s ease-in-out forwards; /* Left slide animation */
+    }
+
+    /* Keyframes for sliding animations */
+    @keyframes slide-in-right {
+        0% {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        100% {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slide-out-left {
+        0% {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        100% {
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+    }

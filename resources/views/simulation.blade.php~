@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CENTRE FOR MEDICAL SIMULATION AND PATIENT SAFETY – AIC KIJABE HOSPITAL</title>
+    <meta name="description" content="Explore the pioneering Center for Medical Simulation and Patient Safety at AIC Kijabe Hospital, enhancing medical education and patient safety across Africa.">
+    <meta name="keywords" content="AIC Kijabe Hospital, Medical Simulation, Patient Safety, Healthcare Training, Africa, Simulation Training">
+    <link rel="canonical" href="https://www.kijabehospital.org/medical-simulation">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.x.x/dist/alpine.min.js" defer></script>
+    <style>
+        .bg-kijabe-blue {
+            background-color: #159ed5;
+        }
+        .text-kijabe-blue {
+            color: #159ed5;
+        }
+        .bg-kijabe-blue-light {
+            background-color: #e6f3fc;
+        }
+        .text-kijabe-blue-light {
+            color: #e6f3fc;
+        }
+        .shadow-kijabe {
+            box-shadow: 0 4px 6px -1px rgba(21, 158, 213, 0.1), 0 2px 4px -1px rgba(21, 158, 213, 0.06);
+        }
+        .slider-image {
+            height: 600px;
+            object-fit: cover;
+        }
+        .overlay-title {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(21, 158, 213, 0.7);
+            padding: 20px 40px;
+            border-radius: 10px;
+        }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+        .fade-animation {
+            animation: fadeInOut 6s infinite;
+        }
+        @keyframes slideInFromLeft {
+            0% { transform: translateX(-100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+        .slide-in-from-left {
+            animation: slideInFromLeft 1s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    @include('layouts.navigation')
+
+<!-- Hero Section with Sliding Images and Overlay -->
+<section x-data="{ currentSlide: 0 }" x-init="setInterval(() => {
+        currentSlide = (currentSlide + 1) % 9; // We use 9 because there are 9 images listed
+    }, 6000)" class="relative mt-0">
+    <div class="overflow-hidden h-[600px]">
+        <div class="flex transition-transform duration-300 ease-in-out h-full" :style="`transform: translateX(-${currentSlide * 100}%)`">
+            @foreach(['sim1.jpg', 'sim2.jpg', 'sim4.jpg', 'training1.jpg', 'training2.jpg', 'training3.jpg', 'training4.jpg', 'training5.jpg', 'training4.jpg'] as $image)
+                <img src="{{ asset('images/' . $image) }}" alt="Simulation and Training Image" class="w-full h-full object-cover">
+            @endforeach
+        </div>
+    </div>
+
+    <!-- Title Overlay -->
+    <div class="overlay-title">
+        <h1 class="text-4xl font-extrabold text-white sm:text-5xl md:text-6xl mb-4 text-center fade-animation">
+            CENTRE FOR MEDICAL SIMULATION AND PATIENT SAFETY
+        </h1>
+        <p class="text-xl text-white sm:text-2xl text-center fade-animation" style="animation-delay: 3s;">
+            AIC KIJABE HOSPITAL
+        </p>
+    </div>
+</section>
+    <!-- Intro Section -->
+    <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="prose prose-lg max-w-none text-gray-700">
+            <p>Established as a groundbreaking initiative in 2017, the Center for Medical Simulation and Patient Safety is the first of its kind in the country, East Asia, and Sub-Saharan Africa. In 2016, Dr. Mark Newton, then anesthesiologist at AC Hospital, identified a critical need for specialized training to improve patient outcomes. His vision came to life through the generous support of the General Electric Foundation, Vanderbilt University Medical Center, Assist International, and Marathon Oil. Today, the center stands as a beacon of innovation, providing state-of-the-art training to healthcare professionals across the region.</p>
+        </div>
+    </div>
+
+    <!-- What is Medical Simulation -->
+    <section class="py-16 bg-white dark:bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-bold text-kijabe-blue mb-6">What is Medical Simulation?</h2>
+            <div class="prose prose-lg max-w-none text-gray-700">
+                <p>"Simulation is essentially an act of enhanced pretending, and healthcare simulation is a training technique that employs realistic scenarios to mirror clinical situations. This allows healthcare professionals to practice and refine their skills in a safe environment, minimizing risks to patient safety," explains Immanuel Mugambi, one of our simulation experts.</p>
+                <p>At the Center for Medical Simulation and Patient Safety, this approach utilizes high-fidelity mannequins that mimic real patients with features like normal heartbeats, eye movements, respiration, and body temperature. The training may also incorporate virtual reality for immersive experiences or standardized patients—actors trained to portray medical conditions.</p>
+                <p>The primary goal of simulation is to enhance clinical decision-making, improve teamwork, and boost the overall competence of healthcare providers. By fostering confidence and skill in a controlled setting, this method ensures that patient safety remains a priority in real-world scenarios.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advancing Healthcare -->
+    <section class="py-16 bg-kijabe-blue-light">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-bold text-kijabe-blue mb-6">Advancing Healthcare Across Africa</h2>
+            <div class="prose prose-lg max-w-none text-gray-700">
+                <p>By equipping healthcare professionals with the knowledge and confidence they need, the Center for Medical Simulation and Patient Safety is shaping the future of medical education and patient care across Africa and beyond.</p>
+            </div>
+
+            <!-- Courses Table -->
+            <div class="mt-8 overflow-x-auto shadow-kijabe">
+                <table class="min-w-full bg-white border border-gray-300">
+                    <thead class="bg-kijabe-blue text-white">
+                        <tr>
+                            <th class="py-3 px-6 text-left font-bold uppercase text-sm">Course</th>
+                            <th class="py-3 px-6 text-left font-bold uppercase text-sm">Duration</th>
+                            <th class="py-3 px-6 text-left font-bold uppercase text-sm">Cost (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach([
+                            ['name' => 'Simulation Instructors Course', 'duration' => '3 Days', 'cost' => '30,000'],
+                            ['name' => 'Managing Emergencies in Pediatric Anesthesia (MEPA)', 'duration' => '2 Days', 'cost' => '10,000'],
+                            ['name' => 'Basic Life Support (BLS)', 'duration' => '1 Day', 'cost' => '7,500'],
+                            ['name' => 'Advanced Cardiac Life Support (ACLS)', 'duration' => '2 Days', 'cost' => '13,500'],
+                            ['name' => 'Pediatric Advanced Life Support (PALS)', 'duration' => '3 Days', 'cost' => '20,000'],
+                            ['name' => 'Critical Events Adult Anesthesia (CEAA)', 'duration' => '2 Days', 'cost' => '10,000'],
+                            ['name' => 'Mobile Obstetric Simulation Training (MOST)', 'duration' => '2 Days', 'cost' => '20,000']
+                        ] as $course)
+                        <tr>
+                            <td class="py-4 px-6 border-b border-gray-300">{{ $course['name'] }}</td>
+                            <td class="py-4 px-6 border-b border-gray-300">{{ $course['duration'] }}</td>
+                            <td class="py-4 px-6 border-b border-gray-300">{{ $course['cost'] }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-4 text-gray-700"><strong>Note:</strong> All costs include training materials, food, and water. Accommodation costs are not included but available on request at a fee.</p>
+        </div>
+    </section>
+
+    <!-- Impact Africa Section -->
+    <section class="py-16 bg-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-bold text-kijabe-blue mb-6 text-center">Our Impact in Africa</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                <div class="relative">
+                    <img src="{{ asset('images/africasimulation.jpg') }}" alt="Impact of our Simulation Center across Africa" class="w-full h-auto rounded-lg shadow-kijabe">
+                </div>
+                <div class="prose prose-lg max-w-none text-gray-700 slide-in-from-left">
+                    <p>The simulation center provides services and trainings to participants from multiple regions across Kenya and Africa, ensuring widespread access to simulation-based education.</p>
+                    <p><strong>Countries impacted by our simulation centre:</strong> Kenya, Uganda, Tanzania, Somaliland, Ethiopia, Liberia, Sudan, and Malawi.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact and Demo Request Section -->
+    <section class="py-16 bg-kijabe-blue-light">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 class="text-3xl font-bold text-kijabe-blue mb-8 text-center">Contact Us & Request a Demo</h2>
+            <div class="flex flex-col md:flex-row justify-between items-start space-y-6 md:space-y-0 md:space-x-6">
+                <!-- Contact -->
+                <div class="w-full md:w-1/2 bg-white p-6 rounded-lg shadow-kijabe">
+                    <h3 class="text-xl font-bold text-kijabe-blue mb-4">Contact Information</h3>
+                    <div class="text-gray-700">
+                        <p class="mb-2">Email: <a href="mailto:simlabadmin@kijabehospital.org" class="text-kijabe-blue hover:underline">simlabadmin@kijabehospital.org</a></p>
+                        <p class="mb-2">Website: <a href="https://www.kijabehospital.org/simulation" class="text-kijabe-blue hover:underline">kijabehospital.org/simulation</a></p>
+                        <p class="mb-2">Phone: <a href="tel:0709728006" class="text-kijabe-blue hover:underline">0709 728 006</a> / <a href="tel:0786350263" class="text-kijabe-blue hover:underline">0786 350 263</a></p>
+                        <p class="font-bold">Promoting patient safety: Because every life matters!</p>
+                    </div>
+                </div>
+
+                <!-- Demo Request -->
+                <div class="w-full md:w-1/2">
+                    <div class="bg-white p-6 rounded-lg shadow-kijabe">
+                        <h3 class="text-xl font-bold text-kijabe-blue mb-4">Request a Demo</h3>
+                        <div x-data="{ open: true }">
+                            <form action="{{ route('simulation.demo') }}" method="POST" class="space-y-4">
+                                @csrf
+                                <input type="text" name="name" placeholder="Your Name" class="w-full p-2 border border-kijabe-blue rounded dark:bg-gray-700 dark:text-gray-200">
+                                <input type="email" name="email" placeholder="Your Email" class="w-full p-2 border border-kijabe-blue rounded dark:bg-gray-700 dark:text-gray-200">
+                                <button type="submit" class="w-full bg-kijabe-blue text-white p-2 rounded hover:bg-[#0d7ca7] transition-colors duration-300">Submit Demo Request</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Call to Action -->
+    <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col items-center space-y-6">
+            <a href="{{ route('simulation.register') }}" class="bg-kijabe-blue hover:bg-[#0d7ca7] text-white font-bold py-3 px-8 rounded-full transition-colors duration-300">
+                Register for Training
+            </a>
+        </div>
+    </div>
+
+    @include('layouts.footer')
+
+</body>
+</html>
