@@ -82,9 +82,9 @@ class AlertController extends Controller
         $alertsData = $resolvedAlerts->map(function ($msg) {
             return [
                 'id' => $msg->id,
-                'full_name' => $msg->appointment->full_name ?? '-',
-                'patient_number' => $msg->appointment->patient_number ?? '-',
-                'phone' => $msg->appointment->phone ?? '-',
+                'full_name' => $msg->is_new_patient ? ($msg->patient_name ?? '-') : ($msg->appointment->full_name ?? '-'),
+                'patient_number' => $msg->is_new_patient ? ($msg->patient_number ?? '-') : ($msg->appointment->patient_number ?? '-'),
+                'phone' => $msg->is_new_patient ? ($msg->phone ?? '-') : ($msg->appointment->phone ?? '-'),
                 'messaging_date' => $msg->messaging_date ?? '-',
                 'urgent_message' => $msg->urgent_message,
                 'sender_name' => $msg->sender_name,

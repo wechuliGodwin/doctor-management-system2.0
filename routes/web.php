@@ -310,7 +310,7 @@ Route::get('/booking/internal', [BookingController::class, 'internal'])->name('b
 Route::get('/dashboard/{status}', [BookingController::class, 'dashboard'])->middleware('web', 'auth.booking')->name('booking.dashboard.status');
 Route::get('/booking/dashboard/{status?}', [BookingController::class, 'dashboard'])->middleware('web', 'auth.booking')->name(name: 'booking.dashboard');
 Route::post('/booking/internal/submit', [BookingController::class, 'submitInternalAppointments'])->name('booking.submitInternal');
-Route::post('/booking/submit', [BookingController::class, 'submitExternalAppointment'])->name('booking.submitExternal');//external
+Route::post('/booking/submit', [BookingController::class, 'submitExternalAppointment'])->name('booking.submitExternal'); //external
 Route::get('/booking/search', [BookingController::class, 'searchBookingPatients'])->name('booking.search');
 Route::post('/booking/external/approve/{appointmentNumber}', [BookingController::class, 'approveExternalAppointment'])->middleware('web', 'auth.booking')->name('booking.approveExternal');
 Route::post('/booking/{id}/cancel', [BookingController::class, 'cancelAppointment'])->middleware('web', 'auth.booking')->name('booking.cancel');
@@ -322,8 +322,6 @@ Route::post('/booking/reschedule/{id}', [BookingController::class, 'reschedule']
 Route::post('/booking/appointments/mark-came', [BookingController::class, 'markAppointmentsCame'])->name('booking.mark-came');
 Route::post('/booking/appointments/mark-missed', [BookingController::class, 'markAppointmentsMissed'])->name('booking.mark-missed');
 
-
-// Route::post('/booking/approve/{appointmentNumber}', [BookingController::class, 'approveExternalAppointment'])->name('booking.approve');
 Route::get('/appointments/cancelled', [BookingController::class, 'appointmentsCancelled'])->name('appointments.cancelled');
 Route::delete('/booking/{id}/delete', [BookingController::class, 'deleteAppointment'])->name('booking.delete');
 Route::get('/booking/view-limits', [BookingController::class, 'viewLimits'])->name('booking.viewLimits');
@@ -340,9 +338,7 @@ Route::get('/booking/reminders', [BookingController::class, 'reminders'])->name(
 Route::post('booking/{id}/clear', [BookingController::class, 'clearAppointment'])->name('booking.clear');
 Route::post('booking/bulk-clear-reminders', [BookingController::class, 'bulkClearReminders'])->name('booking.bulkClearReminders');
 Route::get('/booking/add', [BookingController::class, 'add'])->name('booking.add');
-// Route::get('/appointments/status-filter/{status}', [BookingController::class, 'dashboard'])
-//     ->middleware('web', 'auth.booking')
-//     ->name('booking.status-filter');
+Route::post('/booking/appointments/save-tracing', [BookingController::class, 'saveBookingTracing'])->name('booking.save-tracing');
 Route::get('/appointments/status-filter/{status}', [BookingController::class, 'dashboard'])->name('booking.status-filter');
 Route::prefix('booking')->name('booking.')->middleware(['auth:booking'])->group(function () {
 

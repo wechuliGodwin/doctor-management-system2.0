@@ -1,20 +1,21 @@
 <div class="table-responsive">
-    <table class="table table-striped table-bordered table-sm table-hover mb-0" id="appointmentsTable">
+    <table class="table table-bordered table-sm table-hover mb-0" id="appointmentsTable">
         <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
             <tr>
                 <th><input type="checkbox" id="select-all"></th>
-                <th>S.No</th>
+                <th>Tracing</th>
                 <th>Appointment No.</th>
                 <th>Pt Name</th>
                 <th>Pt No.</th>
                 <th>Phone</th>
-                <th>Email</th>
+                <!-- <th>Email</th> -->
                 <th>Date</th>
                 <th>Time</th>
                 <th>Doctor</th>
                 <th>Specialization</th>
                 <th>Branch</th>
                 <th>Booking Type</th>
+                <th>Tracing Status</th>
                 <th>Appointment Status</th>
                 <th>Notes</th>
                 <th>Doctor Comments</th>
@@ -49,10 +50,6 @@
         background: #343a40;
         color: #ffffff;
         font-weight: 600;
-    }
-
-    .table-striped tbody tr:nth-of-type(odd) {
-        background-color: #f8f9fa;
     }
 
     .table-hover tbody tr:hover {

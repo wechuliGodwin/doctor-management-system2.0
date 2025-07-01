@@ -17,7 +17,8 @@
         body {
             font-family: 'Roboto', sans-serif;
             background-color: #f4f7fa;
-            padding-top: 80px; /* Adjusted for fixed navbar */
+            padding-top: 80px;
+            /* Adjusted for fixed navbar */
             margin: 0;
         }
 
@@ -127,7 +128,8 @@
         }
 
         .booking-form .row {
-            row-gap: 15px; /* Adds spacing between rows */
+            row-gap: 15px;
+            /* Adds spacing between rows */
         }
 
         .booking-form button {
@@ -292,28 +294,28 @@
                             <h2 class="text-center">Book an Appointment</h2>
 
                             @if(session('success'))
-                                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                    {{ session('success') }}
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                {{ session('success') }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
                             @endif
 
                             @if(session('error'))
-                                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                    {{ session('error') }}
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                {{ session('error') }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
                             @endif
 
                             @if ($errors->any())
-                                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                    <ul class="mb-0">
-                                        @foreach ($errors->all() as $error)
-                                            <li>{{ $error }}</li>
-                                        @endforeach
-                                    </ul>
-                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                                </div>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <ul class="mb-0">
+                                    @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                    @endforeach
+                                </ul>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
                             @endif
 
                             <form role="form" method="post" action="{{ route('booking.submitInternal') }}">
@@ -321,7 +323,7 @@
                                 <div class="row g-3">
                                     <div class="col-lg-6 col-12">
                                         <label for="name" class="form-label">Full Name <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <input type="text" name="full_name" id="name" class="form-control"
                                             placeholder="Full name" value="{{ old('full_name') }}" required>
                                         <span id="nameError" class="error"></span>
@@ -329,7 +331,7 @@
 
                                     <div class="col-lg-6 col-12">
                                         <label for="PatientNumber" class="form-label">Patient Number <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <input type="text" name="patient_number" id="PatientNumber" class="form-control"
                                             placeholder="Patient Number" value="{{ old('patient_number') }}" required>
                                     </div>
@@ -342,14 +344,14 @@
 
                                     <div class="col-lg-6 col-12">
                                         <label for="phone" class="form-label">Phone Number <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <input type="tel" name="phone" id="phone" class="form-control"
                                             placeholder="Enter Phone Number" maxlength="10" value="{{ old('phone') }}" required>
                                     </div>
 
                                     <div class="col-lg-6 col-12">
                                         <label for="appointment_date" class="form-label">Date <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <input type="date" name="appointment_date" id="date" value="{{ old('appointment_date') }}"
                                             class="form-control" required>
                                     </div>
@@ -362,19 +364,19 @@
 
                                     <div class="col-lg-6 col-12">
                                         <label for="specialization" class="form-label">Specialization <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <select name="specialization" id="specialization" class="form-control" required>
                                             <option value="">Select specialization</option>
                                             @foreach($bk_specializations ?? [] as $specialization)
-                                                @if(is_object($specialization))
-                                                    <option value="{{ $specialization->name }}" {{ old('specialization') == $specialization->name ? 'selected' : '' }}>
-                                                        {{ $specialization->specialization_name }}
-                                                    </option>
-                                                @else
-                                                    <option value="{{ $specialization }}" {{ old('specialization') == $specialization ? 'selected' : '' }}>
-                                                        {{ $specialization }}
-                                                    </option>
-                                                @endif
+                                            @if(is_object($specialization))
+                                            <option value="{{ $specialization->name }}" {{ old('specialization') == $specialization->name ? 'selected' : '' }}>
+                                                {{ $specialization->specialization_name }}
+                                            </option>
+                                            @else
+                                            <option value="{{ $specialization }}" {{ old('specialization') == $specialization ? 'selected' : '' }}>
+                                                {{ $specialization }}
+                                            </option>
+                                            @endif
                                             @endforeach
                                         </select>
                                     </div>
@@ -387,7 +389,7 @@
 
                                     <div class="col-12">
                                         <label for="booking_type" class="form-label">Type of Booking <span
-                                        class="text-danger">*</span></label>
+                                                class="text-danger">*</span></label>
                                         <select class="form-control" name="booking_type" required>
                                             <option value="" selected>Please Select Type of Booking</option>
                                             <option value="new" {{ old('booking_type') == 'New' ? 'selected' : '' }}>New</option>
@@ -404,7 +406,7 @@
                                 </div>
                             </form>
 
-                            <p><strong>DMS v1.6 © Kijabe Devops</strong></p>
+                            <p><strong>DMS v1.7 © Kijabe Devops</strong></p>
                         </div>
                     </div>
                 </div>
@@ -481,7 +483,7 @@
         //     });
         // });
 
-        document.querySelector('form').addEventListener('submit', function (e) {
+        document.querySelector('form').addEventListener('submit', function(e) {
             const timeInput = document.getElementById('time');
             if (timeInput.value && !timeInput.value.includes(':')) {
                 const hours = timeInput.value.substring(0, 2);

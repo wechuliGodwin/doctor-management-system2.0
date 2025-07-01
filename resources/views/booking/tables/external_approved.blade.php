@@ -1,11 +1,12 @@
 <!-- File: resources/views/booking/tables/external_approved.blade.php -->
 
 <div class="table-responsive">
-    <table class="table table-striped table-bordered table-sm table-hover mb-0">
+    <table class="table table-bordered table-sm table-hover mb-0">
         <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
             <tr>
                 <th><input type="checkbox" id="select-all"></th>
-                <th>S.No</th>
+                <th>Tracing</th>
+                <!-- <th>S.No</th> -->
                 <th>Pt Name</th>
                 <th>Pt No.</th>
                 <th>Phone</th>
@@ -15,6 +16,7 @@
                 <th>Doctor</th>
                 <th>Specialization</th>
                 <th>Booking Type</th>
+                <th>Tracing Status</th>
                 <th>Appointment Status</th>
                 <th>Action</th>
             </tr>

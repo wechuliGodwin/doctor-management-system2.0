@@ -1,9 +1,9 @@
 <div class="table-responsive">
-    <table class="table table-striped table-bordered table-sm table-hover mb-0">
+    <table class="table table-bordered table-sm table-hover mb-0">
         <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
             <tr>
                 <!-- <th><input type="checkbox" id="select-all"></th> -->
-                <th>S.No</th>
+                <!-- <th>S.No</th> -->
                 <th>Appointment No.</th>
                 <th>Pt Name</th>
                 <th>Pt No.</th>
@@ -14,7 +14,7 @@
                 <th>Specialization</th>
                 <th>Branch</th>
                 <th>Booking Type</th>
-                <th>Appointment Status</th>
+                <th>Tracing Status</th>
                 <th>Action</th>
             </tr>
         </thead>

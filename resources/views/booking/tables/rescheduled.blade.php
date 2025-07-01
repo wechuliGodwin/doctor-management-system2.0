@@ -1,6 +1,6 @@
 <!-- resources/views/booking/tables/rescheduled.blade.php -->
 <div class="table-responsive">
-    <table class="table table-striped table-bordered table-sm table-hover mb-0">
+    <table class="table table-bordered table-sm table-hover mb-0">
         <thead class="table-dark" style="position: sticky; top: 0; z-index: 1;">
             <tr>
                 <th>S.No</th>

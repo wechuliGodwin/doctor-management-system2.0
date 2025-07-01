@@ -16,6 +16,7 @@ use App\Models\CancelledAppointment;
 // use App\Models\Specialization;
 use App\Models\BkSpecializations;
 use App\Models\BkDoctor;
+use App\Models\BkTracing;
 use App\Models\BkSpecializationsGroup;
 use App\Models\BkRescheduledAppointments;
 use Carbon\Carbon;
@@ -29,6 +30,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Route;
 
 class BookingController extends Controller
 {
@@ -46,7 +48,7 @@ class BookingController extends Controller
         $userBranch = $user ? $user->hospital_branch : null;
         Log::error('The user branch is ', $userBranch);
         $bk_specializations = BkSpecializations::filter('hospital_branch', $userBranch)->pluck('name')->toArray(); // filter by logged in user
-        return view('booking.internal_booking_form', compact('bk_specializations', ));
+        return view('booking.internal_booking_form', compact('bk_specializations',));
     }
 
     //to show booking form in the dashboard
@@ -77,9 +79,7 @@ class BookingController extends Controller
     public function dashboard(Request $request, $status = null)
     {
         $status = $status ? strtolower($status) : null;
-        Log::info("Dashboard accessed with status: " . ($status ?? 'none'), $request->all());
 
-        // Validate request inputs. Remove 'branch' validation for non-superadmins.
         $validationRules = [
             'ajax' => 'nullable|boolean',
             'export_csv' => 'nullable|boolean',
@@ -89,12 +89,14 @@ class BookingController extends Controller
 
         $user = Auth::guard('booking')->user();
 
+
         // Define user roles for clarity
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
 
         $userBranch = $user ? $user->hospital_branch : null;
         $selectedBranch = null; // Default to no branch selected initially
+        $doctors = BkDoctor::where('hospital_branch', $userBranch)->get();
 
         if ($isSuperadmin && $status !== 'external_pending') {
             $validationRules['branch'] = 'nullable|in:kijabe,westlands,naivasha,marira';
@@ -144,6 +146,8 @@ class BookingController extends Controller
                             'bk_appointments.doctor_name as doctor',
                             'bk_appointments.booking_type',
                             'bk_appointments.appointment_status',
+                            DB::raw("(select status from bk_tracing a where a.appointment_id = bk_appointments.id order by tracing_date desc limit 1) as tracing_status"),
+                            DB::raw('NULL as notes'),
                             'bk_appointments.doctor_comments',
                             'bk_appointments.hospital_branch',
                             'bk_appointments.visit_date',
@@ -152,7 +156,8 @@ class BookingController extends Controller
                         ])
                         ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                         ->where('bk_appointments.booking_type', $bookingType)
-                        ->where('bk_appointments.appointment_status', '!=', 'rescheduled')->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate]);
+                        ->where('bk_appointments.appointment_status', '!=', 'rescheduled')
+                        ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate]);
 
                     if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
                         $query->where('bk_appointments.hospital_branch', $selectedBranch);
@@ -214,7 +219,7 @@ class BookingController extends Controller
                             'status as appointment_status',
                             'notes',
                             DB::raw('NULL as doctor_comments'),
-                            DB::raw('NULL as hospital_branch'), // Explicitly set to NULL
+                            DB::raw('NULL as hospital_branch'),
                             DB::raw('NULL as cancellation_reason'),
                             DB::raw('NULL as visit_date'),
                             'created_at',
@@ -227,7 +232,7 @@ class BookingController extends Controller
                     $data['title'] = 'External Approved Appointments';
                     $query = ExternalApproved::query()
                         ->select([
-                            'id',
+                            'external_approveds.id',
                             'booking_id as appointment_number',
                             'full_name',
                             'patient_number',
@@ -235,9 +240,9 @@ class BookingController extends Controller
                             'phone',
                             'appointment_date',
                             'appointment_time',
-                            'specialization',
+                            'bk_specializations.name as specialization',
                             'doctor_name as doctor',
-                            'hospital_branch',
+                            'external_approveds.hospital_branch',
                             DB::raw('NULL as booking_type'),
                             'appointment_status',
                             'notes',
@@ -246,10 +251,12 @@ class BookingController extends Controller
                             DB::raw('NULL as visit_date'),
                             'created_at',
                             DB::raw('"external_approved" as source_table'),
-                        ])->whereBetween('appointment_date', [$startDate, $endDate]);
+                        ])
+                        ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
+                        ->whereBetween('external_approveds.appointment_date', [$startDate, $endDate]);
 
                     if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                        $query->where('hospital_branch', $selectedBranch);
+                        $query->where('external_approveds.hospital_branch', $selectedBranch);
                     }
                     Log::info("Query built for external_approved. Has branch filter: " . ($selectedBranch ? 'Yes' : 'No'));
                     break;
@@ -296,23 +303,25 @@ class BookingController extends Controller
                             'bk_appointments.patient_number',
                             'bk_appointments.email',
                             'bk_appointments.phone',
-                            'bk_appointments.appointment_date',
-                            'bk_appointments.appointment_time',
+                            DB::raw('COALESCE(new_appointments.appointment_date, bk_appointments.appointment_date) as appointment_date'),
+                            DB::raw('COALESCE(new_appointments.appointment_time, bk_appointments.appointment_time) as appointment_time'),
                             'bk_specializations.name as specialization',
                             'bk_appointments.doctor_name as doctor',
                             'bk_appointments.booking_type',
                             'bk_appointments.appointment_status',
+                            DB::raw("(select status from bk_tracing a where a.appointment_id = bk_appointments.id order by tracing_date desc limit 1) as tracing_status"),
                             DB::raw('NULL as notes'),
                             'bk_appointments.doctor_comments',
                             'bk_appointments.hospital_branch',
                             DB::raw('NULL as cancellation_reason'),
-                            DB::raw('NULL as visit_date'),
+                            'bk_appointments.visit_date',
                             'bk_appointments.created_at',
-                            DB::raw('"internal" as source_table'),
+                            'bk_appointments.booking_type as source_table',
                         ])
                         ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
+                        ->leftJoin('bk_rescheduled_appointments', 'bk_appointments.id', '=', 'bk_rescheduled_appointments.appointment_id')
+                        ->leftJoin('bk_appointments as new_appointments', 'bk_rescheduled_appointments.re_appointment_id', '=', 'new_appointments.id')
                         ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate]);
-
 
                     $pendingQuery = ExternalPendingApproval::query()
                         ->select([
@@ -328,18 +337,15 @@ class BookingController extends Controller
                             DB::raw('NULL as doctor'),
                             DB::raw('NULL as booking_type'),
                             'status as appointment_status',
+                            DB::raw('NULL as tracing_status'),
                             'notes',
                             DB::raw('NULL as doctor_comments'),
                             DB::raw('NULL as hospital_branch'),
                             DB::raw('NULL as cancellation_reason'),
                             DB::raw('NULL as visit_date'),
                             'created_at',
-                            DB::raw('"external_pending" as source_table'),
+                            DB::raw('"external_pending_approvals" as source_table'),
                         ]);
-                    // Restrict external_pending to Kijabe for non-superadmins
-                    if (!$isSuperadmin && $userBranch !== 'kijabe') {
-                        $pendingQuery->whereRaw('1 = 0'); // Return empty result
-                    }
 
                     $approvedQuery = ExternalApproved::query()
                         ->select([
@@ -356,6 +362,7 @@ class BookingController extends Controller
                             'hospital_branch',
                             DB::raw('NULL as booking_type'),
                             'appointment_status',
+                            DB::raw("(select status from bk_tracing a where a.appointment_id = external_approveds.id order by tracing_date desc limit 1) as tracing_status"),
                             'notes',
                             'doctor_comments',
                             DB::raw('NULL as cancellation_reason'),
@@ -378,10 +385,11 @@ class BookingController extends Controller
                             'doctor_name as doctor',
                             'booking_type',
                             DB::raw('"cancelled" as appointment_status'),
+                            DB::raw("(select status from bk_tracing a where a.appointment_id = cancelled_appointments.id order by tracing_date desc limit 1) as tracing_status"),
                             'notes',
                             DB::raw('NULL as doctor_comments'),
-                            'cancellation_reason',
                             'hospital_branch',
+                            'cancellation_reason',
                             DB::raw('NULL as visit_date'),
                             'created_at',
                             DB::raw('"cancelled" as source_table'),
@@ -395,13 +403,31 @@ class BookingController extends Controller
                         }
                     }
 
+                    // Restrict external_pending to Kijabe for non-superadmins
+                    if (!$isSuperadmin && $userBranch !== 'kijabe') {
+                        $pendingQuery->whereRaw('1 = 0');
+                    }
+
                     try {
                         $query = $internalQuery->union($pendingQuery)
                             ->union($approvedQuery)
                             ->union($cancelledQuery);
 
-
                         $appointments = $query->get();
+                        $invalidIds = $appointments->filter(function ($appointment) {
+                            return is_null($appointment->id);
+                        })->toArray();
+                        $duplicateIds = $appointments->groupBy('id')->filter(function ($group) {
+                            return $group->count() > 1;
+                        })->keys()->toArray();
+
+                        if (!empty($invalidIds)) {
+                            Log::warning('Found appointments with null IDs:', ['invalid' => $invalidIds]);
+                        }
+                        if (!empty($duplicateIds)) {
+                            Log::warning('Found appointments with duplicate IDs:', ['duplicates' => $duplicateIds]);
+                        }
+                        $appointments = $appointments->unique('id')->values();
 
                         // Normalize data to ensure consistent structure
                         $appointments = $appointments->map(function ($appointment) {
@@ -412,17 +438,21 @@ class BookingController extends Controller
                                 'patient_number' => $appointment->patient_number ?? '-',
                                 'email' => $appointment->email ?? '-',
                                 'phone' => $appointment->phone ?? '-',
-                                'appointment_date' => $appointment->appointment_date ? (string) $appointment->appointment_date : null,
-                                'appointment_time' => $appointment->appointment_time ?? null,
+                                'appointment_date' => $appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '-',
+                                'appointment_time' => $appointment->appointment_time ?? '-',
                                 'specialization' => $appointment->specialization ?? '-',
                                 'doctor' => $appointment->doctor ?? '-',
                                 'booking_type' => $appointment->booking_type ?? '-',
-                                'appointment_status' => $appointment->appointment_status ?? '-',
+                                'appointment_status' => $appointment->appointment_status ?? 'pending',
+                                'tracing_status' => $appointment->tracing_status ?? '-',
                                 'notes' => $appointment->notes ?? '-',
                                 'doctor_comments' => $appointment->doctor_comments ?? '-',
                                 'hospital_branch' => $appointment->hospital_branch ?? '-',
                                 'cancellation_reason' => $appointment->cancellation_reason ?? '-',
-                                'created_at' => $appointment->created_at ? (string) $appointment->created_at : (string) now(),
+                                'visit_date' => $appointment->visit_date ? Carbon::parse($appointment->visit_date)->format('Y-m-d') : '-',
+                                'created_at' => $appointment->created_at && is_string($appointment->created_at) && Carbon::canBeCreatedFromFormat($appointment->created_at, 'Y-m-d H:i:s')
+                                    ? Carbon::parse($appointment->created_at)->format('Y-m-d H:i:s')
+                                    : now()->format('Y-m-d H:i:s'),
                                 'source_table' => $appointment->source_table ?? 'unknown',
                             ];
                         })->unique('id')->values();
@@ -430,9 +460,7 @@ class BookingController extends Controller
                         Log::info('Appointments fetched for all after normalization:', [
                             'count' => $appointments->count(),
                             'first_item' => $appointments->first() ? json_encode($appointments->first()) : null,
-                            'is_array' => is_array($appointments->toArray()),
                         ]);
-
                     } catch (\Exception $e) {
                         Log::error("Query failed for status all: " . $e->getMessage(), [
                             'sql' => $query->toSql(),
@@ -491,6 +519,7 @@ class BookingController extends Controller
                             'booking_type' => $appointment->booking_type ?? '-',
                             'appointment_status' => $appointment->appointment_status ?? '-',
                             'notes' => $appointment->notes ?? '-',
+                            'tracing_status' => $appointment->tracing_status ?? '-',
                             'doctor_comments' => $appointment->doctor_comments ?? '-',
                             'hospital_branch' => $appointment->hospital_branch ?? '-',
                             'cancellation_reason' => $appointment->cancellation_reason ?? '-',
@@ -573,8 +602,8 @@ class BookingController extends Controller
             $data['selectedBranch'] = $selectedBranch;
             $data['isSuperadmin'] = $isSuperadmin;
             $data['isAdmin'] = $isAdmin;
+            $data['doctors'] = $doctors;
             $view = 'booking.appointments_list';
-
         } else {
 
             $baseQuery = BkAppointments::query()
@@ -628,8 +657,7 @@ class BookingController extends Controller
 
 
             // Cancelled: filter by branch if selectedBranch is defined and column exists
-            $cancelledQuery = CancelledAppointment::whereBetween('appointment_date', [$startDate, $endDate]);
-            ;
+            $cancelledQuery = CancelledAppointment::whereBetween('appointment_date', [$startDate, $endDate]);;
             if ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
                 $cancelledQuery->where('hospital_branch', $selectedBranch);
             }
@@ -644,7 +672,7 @@ class BookingController extends Controller
                 $data['totalCancelledAppointments'];
 
             // Specialization chart data
-            $specializationData = $specializations->map(function ($specialization) use ($isSuperadmin, $selectedBranch, $startDate, $endDate,$userBranch) {
+            $specializationData = $specializations->map(function ($specialization) use ($isSuperadmin, $selectedBranch, $startDate, $endDate, $userBranch) {
                 $apptQuery = BkAppointments::where('specialization', $specialization->id)
                     ->whereBetween('appointment_date', [$startDate, $endDate]);
                 if ($selectedBranch) {
@@ -734,7 +762,7 @@ class BookingController extends Controller
                             BkAppointments::where('hospital_branch', $selectedBranch)
                                 ->whereBetween('appointment_date', [$startDate, $endDate])
                                 ->count() +
-                            ExternalApproved::where('hospital_branch', $selectedBranch)
+                                ExternalApproved::where('hospital_branch', $selectedBranch)
                                 ->whereBetween('appointment_date', [$startDate, $endDate])
                                 ->count()
                         ],
@@ -749,12 +777,186 @@ class BookingController extends Controller
             $data['selectedBranch'] = $selectedBranch;
             $data['isSuperadmin'] = $isSuperadmin;
             $data['isAdmin'] = $isAdmin;
+            $data['doctors'] = $doctors;
+
             $view = 'booking.dashboard';
         }
 
         return view($view, $data);
     }
     // Internal booking submit
+
+    // public function submitInternalAppointments(Request $request)
+    // {
+    //     $consents = $request->input('consent', []);
+    //     $validated = $request->validate([
+    //         'full_name' => 'required|string|max:255',
+    //         'patient_number' => 'required|string|max:50',
+    //         'email' => 'nullable|email|max:100',
+    //         'appointment_date' => 'required|date',
+    //         'appointment_time' => 'nullable',
+    //         'specialization' => 'required|string|max:255',
+    //         'doctor_name' => 'nullable|string|max:100',
+    //         'booking_type' => 'required|in:new,post_op,review',
+    //         'phone' => 'required|string|max:100',
+    //         'hospital_branch' => 'required|in:kijabe,naivasha,westlands,marira',
+    //     ]);
+
+    //     $bkspecialization = BkSpecializations::where('name', $validated['specialization'])
+    //         ->where('hospital_branch', $validated['hospital_branch'])
+    //         ->first();
+
+    //     $doctor = BkDoctor::where('doctor_name', $validated['doctor_name'])
+    //         ->where('hospital_branch', $validated['hospital_branch'])
+    //         ->first();
+    //     $doctor_id = $doctor ? $doctor->id : null;
+
+    //     if (!$bkspecialization) {
+    //         return back()->withInput()->with('error', 'Specialization not found.');
+    //     }
+
+    //     // Check booking limits
+    //     $appointmentDate = $validated['appointment_date'];
+    //     $currentBookings = $this->getActiveBookingsForDate($validated['specialization'], $appointmentDate);
+
+    //     if ($bkspecialization->limits && $currentBookings >= $bkspecialization->limits) {
+    //         $errorMessage = "Cannot book appointment. The daily limit of {$bkspecialization->limits} appointments for {$validated['specialization']} on " .
+    //             date('Y-m-d', strtotime($appointmentDate)) . " has been reached. Current bookings: {$currentBookings}.";
+
+    //         // Fetch alternative dates
+    //         //$alternativeDates = $this ->getAlternativeDates($validated['specialization'], $validated['hospital_branch'], $bkspecialization->limits);
+    //         $alternativeDates = $this->getAlternativeDates($validated['specialization'], $validated['hospital_branch'], $bkspecialization->limits, $bkspecialization->day_of_week, $appointmentDate);
+
+    //         \Log::warning("Appointment booking limit exceeded", [
+    //             'specialization' => $validated['specialization'],
+    //             'date' => $appointmentDate,
+    //             'current_bookings' => $currentBookings,
+    //             'limit' => $bkspecialization->limits,
+    //             'hospital_branch' => $validated['hospital_branch'],
+    //             'suggested_dates' => $alternativeDates,
+    //         ]);
+
+    //         return back()->withInput()->with([
+    //             'error' => $errorMessage,
+    //             'suggested_dates' => $alternativeDates,
+    //         ]);
+    //     }
+
+    //     try {
+    //         $appointmentNumber = 'APPT-' . date('Y') . '-' . Str::upper(Str::random(8));
+    //         $appointmentData = [
+    //             'appointment_number' => $appointmentNumber,
+    //             'full_name' => $validated['full_name'],
+    //             'patient_number' => $validated['patient_number'],
+    //             'email' => $validated['email'],
+    //             'phone' => $validated['phone'],
+    //             'appointment_date' => $validated['appointment_date'],
+    //             'appointment_time' => $validated['appointment_time'] . ':00',
+    //             'specialization' => $bkspecialization->id,
+    //             'doctor_name' => $validated['doctor_name'],
+    //             'hospital_branch' => $validated['hospital_branch'],
+    //             'booking_type' => $validated['booking_type'],
+    //             'appointment_status' => 'pending',
+    //             'consent' => isset($validated['consent']) ? implode(',', $validated['consent']) : null,
+    //             'sms_check' => in_array('sms', $consents) ? 1 : 0,
+    //             'whatsapp_check' => in_array('whatsapp', $consents) ? 1 : 0,
+    //             'email_check' => in_array('email', $consents) ? 1 : 0,
+    //             'doctor_id' => $doctor_id,
+    //         ];
+
+    //         $appointment = BkAppointments::create($appointmentData);
+
+    //         \Log::info("Internal appointment booked", [
+    //             'specialization' => $bkspecialization->name,
+    //             'date' => $validated['appointment_date'],
+    //             'appointment_id' => $appointment->id,
+    //             'hospital_branch' => $validated['hospital_branch'],
+    //             'bookings_after_creation' => $currentBookings + 1,
+    //             'limit' => $bkspecialization->limits,
+    //         ]);
+
+    //         return redirect()->back()->with('success', 'Appointment booked successfully!');
+    //     } catch (\Exception $e) {
+    //         Log::error('Appointment creation failed', ['error' => $e->getMessage()]);
+    //         return back()->withInput()->with('error', 'Failed to book appointment: ' . $e->getMessage());
+    //     }
+    // }
+
+
+    // private function getAlternativeDates($specialization, $hospital_branch, $limit, $day_of_week, $start_date)
+    // {
+    //     $suggestions = [];
+    //     $specialization_id = BkSpecializations::where('name', $specialization)
+    //         ->where('hospital_branch', $hospital_branch)
+    //         ->value('id');
+
+    //     // Define day map for Carbon day numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
+    //     $dayMap = [
+    //         'sunday' => 0,
+    //         'monday' => 1,
+    //         'tuesday' => 2,
+    //         'wednesday' => 3,
+    //         'thursday' => 4,
+    //         'friday' => 5,
+    //         'saturday' => 6,
+    //     ];
+
+    //     // Check if day_of_week is valid
+    //     $isDailyDefault = !isset($dayMap[strtolower($day_of_week ?? '')]);
+    //     $targetDayOfWeek = $isDailyDefault ? null : $dayMap[strtolower($day_of_week)];
+
+    //     // Parse the requested start_date
+    //     $currentDate = Carbon::parse($start_date)->startOfDay();
+
+    //     // Get existing bookings for future dates
+    //     $existingBookings = BkAppointments::selectRaw('appointment_date, COUNT(*) as total')
+    //         ->where('specialization', $specialization_id)
+    //         ->where('hospital_branch', $hospital_branch)
+    //         ->where('appointment_date', '>=', $currentDate)
+    //         ->where('appointment_status', '!=', 'rescheduled')
+    //         ->groupBy('appointment_date')
+    //         ->pluck('total', 'appointment_date')
+    //         ->toArray();
+
+    //     // Find the next five available dates
+    //     $count = 0;
+    //     for ($i = 0; $count < 5; $i++) {
+    //         // Calculate the next date
+    //         $nextDate = (clone $currentDate)->addDays($i + 1); // Start from the next day
+
+    //         // If a valid day_of_week is provided, adjust to the next occurrence of that day
+    //         if (!$isDailyDefault && $nextDate->dayOfWeek != $targetDayOfWeek) {
+    //             //$nextDate->next($targetDayOfWeek); // Move to the next occurrence of the target
+    //             $nextDate = (clone ($currentDate))->addDays(($i + 1) * 7); // Move to next week
+
+    //         }
+
+    //         $dateStr = $nextDate->format('Y-m-d');
+    //         $totalBookings = isset($existingBookings[$dateStr]) ? $existingBookings[$dateStr] : 0;
+
+    //         // Only include dates with available slots
+    //         if ($totalBookings < $limit) {
+    //             $suggestions[] = [
+    //                 'appointment_date' => $dateStr,
+    //                 'total' => $totalBookings,
+    //                 'day_of_week' => $nextDate->format('l'),
+    //                 'limit' => $limit,
+    //             ];
+    //             $count++;
+    //         }
+    //     }
+
+    //     return $suggestions;
+    // }
+
+
+    // private function getTotalActiveBookingsForDate($specialization, $date)
+    // {
+    //     return BkAppointments::where('specialization', BkSpecializations::where('name', $specialization)->value('id'))
+    //         ->where('appointment_date', $date)
+    //         ->where('appointment_status', '!=', 'rescheduled')
+    //         ->count();
+    // }
     public function submitInternalAppointments(Request $request)
     {
         $consents = $request->input('consent', []);
@@ -794,7 +996,7 @@ class BookingController extends Controller
                 date('Y-m-d', strtotime($appointmentDate)) . " has been reached. Current bookings: {$currentBookings}.";
 
 
-            \Log::warning("Appointment booking limit exceeded", [
+            Log::warning("Appointment booking limit exceeded", [
                 'specialization' => $validated['specialization'],
                 'date' => $appointmentDate,
                 'current_bookings' => $currentBookings,
@@ -830,7 +1032,7 @@ class BookingController extends Controller
 
             $appointment = BkAppointments::create($appointmentData);
 
-            \Log::info("Internal appointment booked", [
+            Log::info("Internal appointment booked", [
                 'specialization' => $bkspecialization->name,
                 'date' => $validated['appointment_date'],
                 'appointment_id' => $appointment->id,
@@ -841,17 +1043,18 @@ class BookingController extends Controller
 
             return redirect()->back()->with('success', 'Appointment booked successfully!');
         } catch (\Exception $e) {
-            \Log::error('Appointment creation failed', ['error' => $e->getMessage()]);
+            Log::error('Appointment creation failed', ['error' => $e->getMessage()]);
             return back()->withInput()->with('error', 'Failed to book appointment: ' . $e->getMessage());
         }
     }
+
     // External booking submit
     public function submitExternalAppointment(Request $request)
     {
         $validated = $request->validate([
             'full_name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
-            'phone' => 'required|string|max:20',
+            'phone' => 'required|string|max:100',
             'appointment_date' => 'required|date|after_or_equal:today',
             'specialization_awareness' => 'required|in:not_aware,aware',
             'specialization' => 'required_if:specialization_awareness,aware|string|max:100',
@@ -1003,13 +1206,13 @@ class BookingController extends Controller
 
     public function approveExternalAppointment(Request $request, $appointmentNumber)
     {
-        \Log::info('Attempting to approve appointment', ['appointment_number' => $appointmentNumber, 'input' => $request->all()]);
+        Log::info('Attempting to approve appointment', ['appointment_number' => $appointmentNumber, 'input' => $request->all()]);
 
         // Validate the input
         $validated = $request->validate([
             'patient_number' => 'required|string|max:50',
             'full_name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
+            'phone' => 'required|string|max:100',
             'email' => 'nullable|email|max:100',
             'doctor_name' => 'nullable|string|max:100',
             'appointment_date' => 'required|date|after_or_equal:today',
@@ -1024,7 +1227,7 @@ class BookingController extends Controller
         // Find the pending appointment
         $pendingAppointment = ExternalPendingApproval::where('appointment_number', $appointmentNumber)->first();
         if (!$pendingAppointment) {
-            \Log::error('Pending appointment not found', ['appointment_number' => $appointmentNumber]);
+            Log::error('Pending appointment not found', ['appointment_number' => $appointmentNumber]);
             return redirect()->route('booking.dashboard.status', 'external_pending')->with('error', 'Pending appointment not found.');
         }
 
@@ -1032,11 +1235,11 @@ class BookingController extends Controller
         $specializationName = $validated['specialization'];
         $specialization = BkSpecializations::where('name', $specializationName)->first();
         if (!$specialization) {
-            \Log::error('Specialization not found', ['specialization' => $specializationName]);
+            Log::error('Specialization not found', ['specialization' => $specializationName]);
             return back()->withInput()->with('error', "Specialization '{$specializationName}' not found.");
         }
 
-        \DB::beginTransaction();
+        DB::beginTransaction();
         try {
             $approvedData = [
                 'appointment_status' => 'approved',
@@ -1057,11 +1260,24 @@ class BookingController extends Controller
 
             // Create approved appointment
             $approvedAppointment = ExternalApproved::create($approvedData);
-            \Log::info('Created approved appointment', ['booking_id' => $approvedAppointment->booking_id, 'id' => $approvedAppointment->id]);
+            Log::info('Created approved appointment', ['booking_id' => $approvedAppointment->booking_id, 'id' => $approvedAppointment->id]);
+
+            // Save tracing record based on patient_notified
+            $tracingStatus = ($validated['patient_notified'] ?? false) ? 'contacted' : 'not contacted';
+            BkTracing::create([
+                'appointment_id' => $approvedAppointment->id,
+                'tracing_date' => now(),
+                'status' => $tracingStatus,
+                'message' => $tracingStatus === 'contacted' ? 'Patient notified during appointment approval.' : 'Patient not notified during appointment approval.',
+            ]);
+            Log::info('Created tracing record', [
+                'appointment_id' => $approvedAppointment->id,
+                'status' => $tracingStatus,
+            ]);
 
             // Delete pending appointment
             $pendingAppointment->delete();
-            \Log::info('Deleted pending appointment', ['appointment_number' => $appointmentNumber]);
+            Log::info('Deleted pending appointment', ['appointment_number' => $appointmentNumber]);
 
             // Send approval email
             if ($approvedAppointment->email && $approvedAppointment->email !== 'N/A') {
@@ -1069,15 +1285,15 @@ class BookingController extends Controller
                 $emailData['message'] = 'Your appointment has been approved. Please note that the appointment is subject to change based on availability or unforeseen circumstances. You will be notified in case of any updates or adjustments.';
                 $emailData['subject'] = 'Appointment Approval';
                 Mail::to($approvedAppointment->email)->send(new ContactFormMail($emailData));
-                \Log::info("Approval email sent to {$approvedAppointment->email}", ['booking_id' => $approvedAppointment->booking_id]);
+                Log::info("Approval email sent to {$approvedAppointment->email}", ['booking_id' => $approvedAppointment->booking_id]);
             }
 
-            \DB::commit();
-            \Log::info('Appointment approved successfully', ['booking_id' => $approvedAppointment->booking_id]);
+            DB::commit();
+            Log::info('Appointment approved successfully', ['booking_id' => $approvedAppointment->booking_id]);
             return redirect()->route('booking.dashboard.status', 'external_approved')->with('success', 'Appointment approved successfully.');
         } catch (\Exception $e) {
-            \DB::rollBack();
-            \Log::error('Failed to approve appointment', [
+            DB::rollBack();
+            Log::error('Failed to approve appointment', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'appointment_number' => $appointmentNumber
@@ -1085,60 +1301,177 @@ class BookingController extends Controller
             return back()->withInput()->with('error', 'Failed to approve appointment: ' . $e->getMessage());
         }
     }
+    public function saveBookingTracing(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'appointment_id' => 'required|exists:bk_appointments,id',
+            'tracing_date' => 'required|date',
+            'status' => 'required|in:contacted,not contacted,other',
+            'message' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => $validator->errors()->first()
+            ], 422);
+        }
+
+        BkTracing::create([
+            'appointment_id' => $request->appointment_id,
+            'tracing_date' => $request->tracing_date,
+            'status' => $request->status,
+            'message' => $request->message,
+        ]);
+
+        return response()->json([
+            'message' => 'Tracing info saved successfully!'
+        ], 200);
+    }
     public function view($id, $status)
     {
-
         $user = Auth::guard('booking')->user();
-        // Define user roles for clarity
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
-
         $userBranch = $user ? $user->hospital_branch : null;
 
-        $specializations = BkSpecializations::where('hospital_branch', $userBranch); // filter by logged in user
+        $specializations = BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
 
         $appointment = null;
 
         switch ($status) {
             case 'new':
-                $appointment = BkAppointments::find($id);
-                break;
             case 'review':
-                $appointment = BkAppointments::find($id);
-                break;
             case 'postop':
-                $appointment = BkAppointments::find($id);
+                $appointment = BkAppointments::query()
+                    ->select([
+                        'bk_appointments.*',
+                        'bk_specializations.name as specialization', // Fetch name instead of ID
+                    ])
+                    ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
+                    ->where('bk_appointments.id', $id)
+                    ->first();
                 break;
             case 'external_pending':
                 $appointment = ExternalPendingApproval::where('id', $id)->where('status', 'pending')->first();
                 break;
             case 'external_approved':
-                $appointment = ExternalApproved::find($id);
+                $appointment = ExternalApproved::query()
+                    ->select([
+                        'external_approveds.*',
+                        'bk_specializations.name as specialization', // Ensure name is used
+                    ])
+                    ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
+                    ->where('external_approveds.id', $id)
+                    ->first();
                 break;
             case 'cancelled':
                 $appointment = CancelledAppointment::find($id);
                 break;
             default:
-                return redirect()->route('booking.dashboard')->with('error', 'Invalid status.');
+                Log::warning("Invalid status for view: {$status}", ['id' => $id]);
+                return response()->json(['error' => 'Invalid status provided.'], 400);
         }
 
         if (!$appointment) {
-            return redirect()->route('booking.dashboard')->with('error', 'Appointment not found.');
+            Log::error('Appointment not found', ['id' => $id, 'status' => $status]);
+            return response()->json(['error' => 'Appointment not found.'], 404);
         }
 
-        // Log the appointment data to debug email and doctor_comments
-        \Log::info("Viewing appointment ID: {$id} with status: {$status}", [
+        Log::info("Viewing appointment ID: {$id} with status: {$status}", [
             'email' => $appointment->email ?? 'Not set',
             'doctor_comments' => $appointment->doctor_comments ?? 'Not set',
+            'specialization' => $appointment->specialization ?? 'Not set',
         ]);
 
-        // Pass both the appointment, status, and specializations for the dropdown
+        // Render the modal body
+        $bodyHtml = view('booking.view', compact('appointment', 'status', 'specializations'))->render();
+
+        // Render the footer buttons dynamically
+        $footerHtml = '
+        <button type="button" class="btn btn-sm" style="background-color: #6c757d;" data-bs-dismiss="modal"><i class="fas fa-times"></i> Close</button>
+        <button type="submit" form="update-form" class="btn btn-sm" style="background-color: #5bbbe1;"><i class="fas fa-save"></i> Save</button>';
+
+        // Add Reapprove button for cancelled appointments
+        if (($status === 'all' ? $appointment->source_table : $status) === 'cancelled') {
+            $footerHtml .= '
+            <form action="' . route('booking.reapprove', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '" method="POST" style="display: inline-block;" class="appointment-form" onsubmit="return confirm(\'Are you sure you want to reapprove this appointment? It will be moved back to its original status.\');">
+                ' . csrf_field() . '
+                ' . method_field('POST') . '
+                <input type="hidden" name="status" value="' . ($status === 'all' ? $appointment->source_table : $status) . '">
+                <button type="submit" class="btn btn-info btn-sm"><i class="fas fa-check"></i> Reapprove</button>
+            </form>';
+        }
+
+        // Add Clear button for reminders (non-cancelled appointments)
+        if (Route::is('booking.reminders') && ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled')) && ($appointment->appointment_status ?? '') !== 'cancelled') {
+            $footerHtml .= '
+            <form action="' . route('booking.clear', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '" method="POST" style="display: inline-block;" class="appointment-form" onsubmit="return confirm(\'Are you sure you want to clear this reminder? It will be removed from the reminder list.\');">
+                ' . csrf_field() . '
+                ' . method_field('POST') . '
+                <input type="hidden" name="status" value="' . ($status === 'all' ? $appointment->source_table : $status) . '">
+                <button type="submit" class="btn btn-sm" style="background-color: #f0ad4e;"><i class="fas fa-check"></i> Clear</button>
+            </form>';
+        }
+
+        // Add Delete button
+        $footerHtml .= '
+        <form action="' . route('booking.delete', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '" method="POST" style="display: inline-block;" class="appointment-form" onsubmit="return confirm(\'Are you sure you want to delete this appointment? This action cannot be undone.\');">
+            ' . csrf_field() . '
+            ' . method_field('DELETE') . '
+            <input type="hidden" name="status" value="' . ($status === 'all' ? $appointment->source_table : $status) . '">
+            <button type="submit" class="btn btn-sm" style="background-color: #dc3545;"><i class="fas fa-trash-alt"></i> Delete</button>
+        </form>';
+
+        // Add Cancel button (non-cancelled appointments)
+        if (
+            !Route::is('booking.reminders') &&
+            ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled')) &&
+            ($appointment->appointment_status ?? '') !== 'cancelled' &&
+            ($appointment->appointment_status ?? '') !== 'rescheduled'
+        ) {
+            $footerHtml .= '
+        <button type="button" class="btn btn-sm cancel-appointment" style="background-color: #6c757d;" 
+                data-id="' . $appointment->id . '" 
+                data-source-table="' . ($status === 'all' ? $appointment->source_table : $status) . '" 
+                data-full-name="' . ($appointment->full_name ?? 'N/A') . '" 
+                data-patient-number="' . ($appointment->patient_number ?? 'N/A') . '">
+                <i class="fas fa-ban"></i> Cancel
+        </button>';
+        }
+
+        // Add Reschedule button (non-cancelled appointments)
+        if ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled') && ($appointment->appointment_status ?? '') !== 'cancelled') {
+            $footerHtml .= '
+            <button type="button" class="btn btn-sm btn-info openRescheduleModal" style="background-color: #6c757d;" data-bs-toggle="modal" data-bs-target="#rescheduleAppointmentModal"
+                data-action="' . route('booking.reschedule', [$appointment->id, 'all']) . '"
+                data-id="' . $appointment->id . '"
+                data-full_name="' . ($appointment->full_name ?? '') . '"
+                data-patient_number="' . ($appointment->patient_number ?? '') . '"
+                data-email="' . ($appointment->email ?? '') . '"
+                data-phone="' . ($appointment->phone ?? '') . '"
+                data-appointment_date="' . ($appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '') . '"
+                data-appointment_time="' . ($appointment->appointment_time ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i') : '') . '"
+                data-specialization="' . ($appointment->specialization ?? '') . '"
+                data-doctor_name="' . ($appointment->doctor_name ?? $appointment->doctor ?? '') . '"
+                data-booking_type="' . ($appointment->booking_type ?? '') . '">
+                <i class="fas fa-calendar-alt"></i> Reschedule
+            </button>';
+        }
+
+        if (request()->ajax()) {
+            return response()->json([
+                'html' => $bodyHtml,
+                'footer' => $footerHtml,
+                'appointment' => $appointment,
+                'status' => $status,
+            ]);
+        }
+
         return view('booking.view', compact('appointment', 'status', 'specializations'));
     }
-
     public function edit($id, $status)
     {
-        \Log::info("Edit accessed", ['id' => $id, 'status' => $status]);
+        Log::info("Edit accessed", ['id' => $id, 'status' => $status]);
         $appointment = null;
         $specializations = BkSpecializations::all();
 
@@ -1162,7 +1495,7 @@ class BookingController extends Controller
                 $appointment = CancelledAppointment::findOrFail($id);
                 break;
             default:
-                \Log::warning("Invalid status for edit: {$status}", ['id' => $id]);
+                Log::warning("Invalid status for edit: {$status}", ['id' => $id]);
                 return redirect()->route('booking.dashboard')->with('error', 'Invalid status.');
         }
 
@@ -1170,80 +1503,87 @@ class BookingController extends Controller
     }
     public function update(Request $request, $id)
     {
-        $status = $request->input('status');
         $source_table = $request->input('source_table');
+        $status = $request->input('status', $source_table); // Fallback to source_table if status is not provided
         $form_type = $request->input('form_type');
-        $appointment = null;
-        //$hospitalBranches = $this->getHospitalBranchEnumValues();
-        // Validate the request
+        $hospitalBranches = $this->getHospitalBranchEnumValues(); // Ensure this method exists
+        // Log request data for debugging
+        Log::info('Update request data:', [
+            'id' => $id,
+            'source_table' => $source_table,
+            'status' => $status,
+            'form_type' => $form_type,
+            'all' => $request->all()
+        ]);
+        // Validation rules
         $rules = [
             'full_name' => 'required|string|max:100',
             'patient_number' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:100',
-            'phone' => 'required|string|max:20',
-            'appointment_date' => 'required|date',
+            'phone' => 'required|string|max:100',
+            'appointment_date' => 'nullable|date', // Nullable for rescheduled appointments
             'appointment_time' => 'nullable|date_format:H:i',
             'specialization' => 'required|string|max:100',
             'doctor_name' => 'nullable|string|max:100',
             'appointment_status' => 'required|in:pending,honoured,missed,late,cancelled',
-            'booking_type' => 'nullable|in:new,review,post_op' . (in_array($status, ['new', 'review', 'postop', 'branch']) && $source_table !== 'external_approved' ? '|required' : ''),
+            'booking_type' => 'nullable|in:new,review,post_op' . (in_array($source_table, ['new', 'review', 'postop']) && $source_table !== 'external_approved' ? '|required' : ''),
             'doctor_comments' => 'nullable|string|max:5000',
             'cancellation_reason' => 'nullable|string|max:5000' . ($request->input('appointment_status') === 'cancelled' ? '|required' : ''),
             'notes' => 'nullable|string|max:5000',
             'status_field' => 'nullable|in:pending,approved',
             'patient_notified' => 'nullable|in:0,1',
             'booking_id' => 'nullable|string|max:100',
-            //'hospital_branch' => 'required|in:' . implode(',', $hospitalBranches),
+            'hospital_branch' => 'nullable|in:' . implode(',', $hospitalBranches),
             'remarks' => 'nullable|string|max:5000',
-            'source_table' => 'nullable|in:new,review,postop,external_pending,external_approved,cancelled',
+            'source_table' => 'nullable|in:new,review,postop,external_pending,external_approved,cancelled,rescheduled',
             'form_type' => 'nullable|in:all_details',
             'visit_date' => 'nullable|date',
-
+            'previous_date' => 'nullable|date',
+            'previous_time' => 'nullable|date_format:H:i',
+            'current_date' => 'nullable|date',
+            'current_time' => 'nullable|date_format:H:i',
+            'reason' => 'nullable|string|max:5000',
         ];
 
-        $validated = $request->validate($rules);
+        try {
+            $validated = $request->validate($rules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed for update:', [
+                'id' => $id,
+                'source_table' => $source_table,
+                'errors' => $e->errors()
+            ]);
+            throw $e; // Let Laravel handle the 422 response
+        }
 
-        // Determine the model
-        // if ($status === 'branch' && $source_table) {
-        //     $status = $source_table;
-        // }
+        // Determine the model based on source_table
+        $modelClass = match ($source_table) {
+            'new', 'review', 'postop' => BkAppointments::class,
+            'external_pending' => ExternalPendingApproval::class,
+            'external_approved' => ExternalApproved::class,
+            'cancelled' => CancelledAppointment::class,
+            'rescheduled' => BkAppointments::class, // Adjust if you have a RescheduledAppointment model
+            default => null,
+        };
 
-        if ($status !== 'all') {
-            $modelClass = match ($status) {
-                'new' => BkAppointments::class,
-                'review' => BkAppointments::class,
-                'postop' => BkAppointments::class,
-                'external_pending' => ExternalPendingApproval::class,
-                'external_approved' => ExternalApproved::class,
-                'cancelled' => CancelledAppointment::class,
-                default => null,
-            };
+        if (!$modelClass) {
+            \Log::error('Invalid source table', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
+            return redirect()->back()->with('error', 'Invalid appointment source.');
+        }
 
-            if (!$modelClass) {
-                \Log::error('Invalid appointment status', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
-                return redirect()->back()->with('error', 'Invalid appointment status.');
-            }
-
-            $appointment = $modelClass::find($id);
-            if (!$appointment) {
-                \Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'model' => $modelClass]);
-                return redirect()->back()->with('error', 'Appointment not found.');
-            }
-        } else {
-            $appointment = $this->findAppointmentById($id);
-            if (!$appointment) {
-                \Log::error('Appointment not found for update', ['id' => $id, 'status' => $status]);
-                return redirect()->back()->with('error', 'Appointment not found.');
-            }
-            $status = $this->getStatusFromModel($appointment); //Status: local, external, ...
+        // Find the appointment
+        $appointment = $modelClass::find($id);
+        if (!$appointment) {
+            \Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'source_table' => $source_table, 'model' => $modelClass]);
+            return redirect()->back()->with('error', 'Appointment not found.');
         }
 
         // Check daily limits for specialization
         $specialization = BkSpecializations::where('name', $validated['specialization'])->first();
-        $oldStatus = $status === 'external_pending' ? $appointment->status : $appointment->appointment_status;
+        $oldStatus = $source_table === 'external_pending' ? ($appointment->status ?? 'pending') : ($appointment->appointment_status ?? 'pending');
         $newStatus = $validated['appointment_status'];
 
-        if ($specialization && $oldStatus !== $newStatus) {
+        if ($specialization && $source_table !== 'rescheduled' && $oldStatus !== $newStatus) {
             $this->updatePastAppointments($specialization->name, $validated['appointment_date']);
             $activeBookings = $this->getActiveBookingsForDate($specialization->name, $validated['appointment_date']);
 
@@ -1257,57 +1597,68 @@ class BookingController extends Controller
             }
         }
 
-        // Prepare the update data
+        // Prepare update data
         $updateData = [
             'full_name' => $validated['full_name'],
             'patient_number' => $validated['patient_number'],
             'email' => $validated['email'],
             'phone' => $validated['phone'],
-            'appointment_date' => $validated['appointment_date'],
-            'appointment_time' => $validated['appointment_time'] ? $validated['appointment_time'] . ':00' : null,
-            'specialization' => $specialization->id,
+            'specialization' => $specialization ? $specialization->id : $validated['specialization'],
             'doctor_name' => $validated['doctor_name'],
             'appointment_status' => $newStatus,
-            'booking_type' => in_array($status, ['new', 'review', 'postop']) ? $validated['booking_type'] : ($appointment->booking_type ?? null),
-            'notes' => $validated['notes'] ?? $appointment->notes ?? null,
-            //'hospital_branch' => in_array($status, ['new', 'review', 'postop', 'external_approved']) ? $validated['hospital_branch'] : ($appointment->hospital_branch ?? null),
+            'booking_type' => in_array($source_table, ['new', 'review', 'postop']) ? $validated['booking_type'] : ($appointment->booking_type ?? null),
+            'notes' => $validated['notes'] ?? ($appointment->notes ?? null),
+            'hospital_branch' => $validated['hospital_branch'] ?? ($appointment->hospital_branch ?? null),
             'visit_date' => $validated['visit_date'] ?? null,
         ];
 
-        if (in_array($status, ['local', 'new', 'review', 'postop', 'external_approved'])) {
-            $updateData['doctor_comments'] = $validated['doctor_comments'] ?? $appointment->doctor_comments ?? null;
+        if ($source_table === 'rescheduled') {
+            $updateData['previous_date'] = $validated['previous_date'] ?? ($appointment->previous_date ?? null);
+            $updateData['previous_time'] = $validated['previous_time'] ? $validated['previous_time'] . ':00' : ($appointment->previous_time ?? null);
+            $updateData['current_date'] = $validated['current_date'] ?? ($appointment->current_date ?? null);
+            $updateData['current_time'] = $validated['current_time'] ? $validated['current_time'] . ':00' : ($appointment->current_time ?? null);
+            $updateData['reason'] = $validated['reason'] ?? ($appointment->reason ?? null);
+            $updateData['booking_type'] = 'rescheduled';
+            unset($updateData['appointment_date']);
+            unset($updateData['appointment_time']);
+        } else {
+            $updateData['appointment_date'] = $validated['appointment_date'];
+            $updateData['appointment_time'] = $validated['appointment_time'] ? $validated['appointment_time'] . ':00' : null;
         }
+
+        if (in_array($source_table, ['new', 'review', 'postop', 'external_approved'])) {
+            $updateData['doctor_comments'] = $validated['doctor_comments'] ?? ($appointment->doctor_comments ?? null);
+        }
+
         if ($newStatus === 'cancelled') {
-            $updateData['cancellation_reason'] = $validated['cancellation_reason'] ?? $appointment->cancellation_reason ?? null;
-            $updateData['remarks'] = $validated['remarks'] ?? $appointment->remarks ?? null;
+            $updateData['cancellation_reason'] = $validated['cancellation_reason'] ?? ($appointment->cancellation_reason ?? null);
+            $updateData['remarks'] = $validated['remarks'] ?? ($appointment->remarks ?? null);
         }
-        if ($status === 'external_pending') {
-            $updateData['status'] = $validated['status_field'] ?? $appointment->status ?? 'pending';
+
+        if ($source_table === 'external_pending') {
+            $updateData['status'] = $validated['status_field'] ?? ($appointment->status ?? 'pending');
             unset($updateData['appointment_status']);
-            unset($updateData['hospital_branch']);
         }
-        if ($status === 'external_approved') {
-            $updateData['patient_notified'] = $validated['patient_notified'] ?? $appointment->patient_notified ?? 0;
-            $updateData['booking_id'] = $validated['booking_id'] ?? $appointment->booking_id ?? null;
+
+        if ($source_table === 'external_approved') {
+            $updateData['patient_notified'] = $validated['patient_notified'] ?? ($appointment->patient_notified ?? 0);
+            $updateData['booking_id'] = $validated['booking_id'] ?? ($appointment->booking_id ?? null);
         }
 
         DB::beginTransaction();
         try {
-            if ($newStatus === 'cancelled' && $status !== 'cancelled') {
+            if ($newStatus === 'cancelled' && $source_table !== 'cancelled') {
                 $newAppointment = CancelledAppointment::create($updateData + [
-                    'appointment_number' => $appointment->appointment_number ?? $appointment->booking_id ?? null,
+                    'appointment_number' => $appointment->appointment_number ?? ($appointment->booking_id ?? null),
                     'cancellation_reason' => $validated['cancellation_reason'],
                     'remarks' => $validated['remarks'] ?? null,
                 ]);
                 $appointment->delete();
                 $newTableStatus = 'cancelled';
-            } elseif (in_array($status, ['local', 'new', 'review', 'postop'])) {
-                $appointment->update($updateData);
-                $newTableStatus = $status;
-            } elseif ($status === 'external_pending' && $validated['status_field'] === 'approved') {
+            } elseif ($source_table === 'external_pending' && $validated['status_field'] === 'approved') {
                 $newAppointment = ExternalApproved::create($updateData + [
-                    'booking_id' => $validated['booking_id'] ?? $appointment->appointment_number ?? null,
-                    'hospital_branch' => $validated['hospital_branch'],
+                    'booking_id' => $validated['booking_id'] ?? ($appointment->appointment_number ?? null),
+                    'hospital_branch' => $validated['hospital_branch'] ?? ($appointment->hospital_branch ?? null),
                     'patient_notified' => $validated['patient_notified'] ?? 0,
                     'appointment_status' => $newStatus,
                 ]);
@@ -1315,39 +1666,144 @@ class BookingController extends Controller
                 $newTableStatus = 'external_approved';
             } else {
                 $appointment->update($updateData);
+                $newTableStatus = $source_table;
             }
 
             \Log::info("Appointment updated/moved", [
                 'id' => $id,
                 'original_status' => $status,
+                'source_table' => $source_table,
+                'new_table_status' => $newTableStatus,
                 'appointment_status' => $newStatus,
                 'booking_type' => $updateData['booking_type'] ?? null,
                 'form_type' => $form_type,
             ]);
 
             DB::commit();
-            //!important
-            // $branch = $request->input('branch') ?? $validated['hospital_branch'];
-            // if ($branch && in_array($branch, $hospitalBranches)) {
-            //     return redirect()->route('booking.branch', $branch)
-            //         ->with('success', 'Appointment updated successfully!');
-            // }
-            return redirect()->route('booking.dashboard.status', $status)
+            return redirect()->route('booking.dashboard.status', $newTableStatus)
                 ->with('success', 'Appointment updated successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Failed to update appointment', [
                 'id' => $id,
                 'status' => $status,
+                'source_table' => $source_table,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
             return redirect()->back()->with('error', 'Failed to update appointment: ' . $e->getMessage());
         }
     }
-    /**
-     * Mark selected appointments as 'honoured' (came)
-     */
+
+    public function cancelAppointment(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'cancellation_reason' => 'required|string|max:5000',
+            'status' => 'required|string',
+        ]);
+
+        $status = $validated['status'];
+
+        $modelClass = match ($status) {
+            'new' => BkAppointments::class,
+            'review' => BkAppointments::class,
+            'postop' => BkAppointments::class,
+            'external_pending' => ExternalPendingApproval::class,
+            'external_approved' => ExternalApproved::class,
+            default => null,
+        };
+
+        if (!$modelClass) {
+            Log::error('Invalid status for cancellation', ['status' => $status]);
+            return redirect()->back()->with('error', 'Invalid appointment status.');
+        }
+
+        $appointment = $modelClass::find($id);
+
+        if (!$appointment) {
+            \Log::error('Appointment not found for cancellation', ['id' => $id, 'status' => $status]);
+            return redirect()->back()->with('error', 'Appointment not found.');
+        }
+
+        \DB::beginTransaction();
+
+        try {
+            $cancelledData = [
+                'patient_number' => $appointment->patient_number ?? 'N/A',
+                'booking_id' => $appointment->booking_id ?? $appointment->appointment_number ?? 'N/A',
+                'full_name' => $appointment->full_name ?? $appointment->name ?? 'N/A',
+                'email' => $appointment->email ?? 'N/A',
+                'phone' => $appointment->phone ?? 'N/A',
+                'specialization' => $appointment->specialization ?? 'N/A',
+                'doctor_name' => $appointment->doctor_name ?? $appointment->doctor ?? 'N/A',
+                'appointment_date' => $appointment->appointment_date,
+                'appointment_time' => $appointment->appointment_time ?? null,
+                'hospital_branch' => $appointment->hospital_branch ?? 'N/A',
+                'remarks' => $appointment->remarks ?? null,
+                'notes' => $appointment->notes ?? null,
+                'cancellation_reason' => $validated['cancellation_reason'],
+                'cancelled_at' => now(),
+                'appointment_number' => $appointment->appointment_number ?? 'N/A',
+                'appointment_status' => $appointment->appointment_status ?? 'cancelled',
+                'booking_type' => $appointment->booking_type ?? $status,
+            ];
+
+            if (empty($cancelledData['patient_number'])) {
+                $cancelledData['patient_number'] = 'UNKNOWN-' . Str::random(8);
+                \Log::warning('Patient number was empty; assigned a default value', ['id' => $id, 'status' => $status]);
+            }
+
+            \Log::debug('Creating CancelledAppointment record', $cancelledData);
+
+            $cancelledAppointment = new CancelledAppointment();
+            foreach ($cancelledData as $key => $value) {
+                $cancelledAppointment->$key = $value;
+            }
+
+            $cancelledAppointment->save();
+
+            $savedCancelled = CancelledAppointment::find($cancelledAppointment->id);
+            if (!$savedCancelled) {
+                throw new \Exception('Failed to save cancelled appointment to the database.');
+            }
+
+            \Log::debug('CancelledAppointment record created', $savedCancelled->toArray());
+
+            // Prepare email data
+            $emailData = $cancelledData;
+            $emailData['message'] = 'Your appointment has been cancelled.';
+            $emailData['subject'] = 'Appointment Cancellation';
+
+            // Send cancellation email
+            if ($cancelledAppointment->email && $cancelledAppointment->email !== 'N/A') {
+                Mail::to($cancelledAppointment->email)->send(new ContactFormMail($emailData));
+                \Log::info("Cancellation email sent to {$cancelledAppointment->email} for appointment ID: {$cancelledAppointment->id}");
+            }
+
+            $appointment->delete();
+
+            \DB::commit();
+
+            \Log::info('Appointment cancelled successfully', [
+                'id' => $cancelledAppointment->id,
+                'booking_id' => $cancelledAppointment->booking_id,
+            ]);
+
+            return redirect()->route('booking.dashboard.status', 'cancelled')
+                ->with('success', 'Appointment cancelled successfully.');
+        } catch (\Exception $e) {
+            \DB::rollBack();
+
+            \Log::error('Failed to cancel appointment', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'input' => $request->all(),
+                'cancelled_data' => $cancelledData ?? null,
+            ]);
+
+            return redirect()->back()->with('error', 'Failed to cancel appointment: ' . $e->getMessage());
+        }
+    }
     public function markAppointmentsCame(Request $request)
     {
         $validated = $request->validate([
@@ -1533,6 +1989,7 @@ class BookingController extends Controller
             'external_pending' => ExternalPendingApproval::class,
             'external_approved' => ExternalApproved::class,
             'cancelled' => CancelledAppointment::class,
+            'rescheduled' => BkRescheduledAppointments::class,
         ];
 
         foreach ($models as $type => $model) {
@@ -1561,190 +2018,87 @@ class BookingController extends Controller
                 return 'external_approved';
             case CancelledAppointment::class:
                 return 'cancelled';
+            case BkRescheduledAppointments::class:
+                return 'rescheduled';
             default:
-                \Log::error('Unknown model class for status determination', ['class' => get_class($appointment)]);
+                Log::error('Unknown model class for status determination', ['class' => get_class($appointment)]);
                 return 'all';
         }
     }
-    public function cancelAppointment(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'cancellation_reason' => 'required|string|max:5000',
-            'status' => 'required|string',
-        ]);
-
-        $status = $validated['status'];
-
-        $modelClass = match ($status) {
-            'new' => BkAppointments::class,
-            'review' => BkAppointments::class,
-            'postop' => BkAppointments::class,
-            'external_pending' => ExternalPendingApproval::class,
-            'external_approved' => ExternalApproved::class,
-            default => null,
-        };
-
-        if (!$modelClass) {
-            \Log::error('Invalid status for cancellation', ['status' => $status]);
-            return redirect()->back()->with('error', 'Invalid appointment status.');
-        }
-
-        $appointment = $modelClass::find($id);
-
-        if (!$appointment) {
-            \Log::error('Appointment not found for cancellation', ['id' => $id, 'status' => $status]);
-            return redirect()->back()->with('error', 'Appointment not found.');
-        }
-
-        \DB::beginTransaction();
-
-        try {
-            $cancelledData = [
-                'patient_number' => $appointment->patient_number ?? 'N/A',
-                'booking_id' => $appointment->booking_id ?? $appointment->appointment_number ?? 'N/A',
-                'full_name' => $appointment->full_name ?? $appointment->name ?? 'N/A',
-                'email' => $appointment->email ?? 'N/A',
-                'phone' => $appointment->phone ?? 'N/A',
-                'specialization' => $appointment->specialization ?? 'N/A',
-                'doctor_name' => $appointment->doctor_name ?? $appointment->doctor ?? 'N/A',
-                'appointment_date' => $appointment->appointment_date,
-                'appointment_time' => $appointment->appointment_time ?? null,
-                'hospital_branch' => $appointment->hospital_branch ?? 'N/A',
-                'remarks' => $appointment->remarks ?? null,
-                'notes' => $appointment->notes ?? null,
-                'cancellation_reason' => $validated['cancellation_reason'],
-                'cancelled_at' => now(),
-                'appointment_number' => $appointment->appointment_number ?? 'N/A',
-                'appointment_status' => $appointment->appointment_status ?? 'cancelled',
-                'booking_type' => $appointment->booking_type ?? $status,
-            ];
-
-            if (empty($cancelledData['patient_number'])) {
-                $cancelledData['patient_number'] = 'UNKNOWN-' . Str::random(8);
-                \Log::warning('Patient number was empty; assigned a default value', ['id' => $id, 'status' => $status]);
-            }
-
-            \Log::debug('Creating CancelledAppointment record', $cancelledData);
-
-            $cancelledAppointment = new CancelledAppointment();
-            foreach ($cancelledData as $key => $value) {
-                $cancelledAppointment->$key = $value;
-            }
-
-            $cancelledAppointment->save();
-
-            $savedCancelled = CancelledAppointment::find($cancelledAppointment->id);
-            if (!$savedCancelled) {
-                throw new \Exception('Failed to save cancelled appointment to the database.');
-            }
-
-            \Log::debug('CancelledAppointment record created', $savedCancelled->toArray());
-
-            // Prepare email data
-            $emailData = $cancelledData;
-            $emailData['message'] = 'Your appointment has been cancelled.';
-            $emailData['subject'] = 'Appointment Cancellation';
-
-            // Send cancellation email
-            if ($cancelledAppointment->email && $cancelledAppointment->email !== 'N/A') {
-                Mail::to($cancelledAppointment->email)->send(new ContactFormMail($emailData));
-                \Log::info("Cancellation email sent to {$cancelledAppointment->email} for appointment ID: {$cancelledAppointment->id}");
-            }
-
-            $appointment->delete();
-
-            \DB::commit();
-
-            \Log::info('Appointment cancelled successfully', [
-                'id' => $cancelledAppointment->id,
-                'booking_id' => $cancelledAppointment->booking_id,
-            ]);
-
-            return redirect()->route('booking.dashboard.status', 'cancelled')
-                ->with('success', 'Appointment cancelled successfully.');
-        } catch (\Exception $e) {
-            \DB::rollBack();
-
-            \Log::error('Failed to cancel appointment', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'input' => $request->all(),
-                'cancelled_data' => $cancelledData ?? null,
-            ]);
-
-            return redirect()->back()->with('error', 'Failed to cancel appointment: ' . $e->getMessage());
-        }
-    }
-
 
     public function reschedule(Request $request, $id)
     {
+        Log::info('Reschedule function called', ['id' => $id, 'input' => $request->all()]);
 
-        $form_type = $request->input('form_type');
-        \Log::info('calling reschedule function');
-        $appointment = null;
-        //$hospitalBranches = $this->getHospitalBranchEnumValues();
         // Validate the request
         $rules = [
             'full_name' => 'required|string|max:100',
             'patient_number' => 'nullable|string|max:50',
             'email' => 'nullable|email|max:100',
-            'phone' => 'required|string|max:20',
-            'appointment_date' => 'required|date',
-            'appointment_time' => 'nullable|date_format:H:i:s',
-            'specialization' => 'required|string|max:100',
+            'phone' => 'required|string|max:100',
+            'appointment_date' => 'required|date|after_or_equal:today',
+            'appointment_time' => 'nullable|date_format:H:i:s,H:i',
+            'specialization' => 'required|string|max:100|exists:bk_specializations,name',
             'doctor_name' => 'nullable|string|max:100',
-            'booking_type' => 'nullable|in:new,review,post_op',
+            'booking_type' => 'required|in:new,review,post_op',
             'form_type' => 'nullable|in:all_details',
-            'reason' => 'required|string|max:512'
+            'reason' => 'required|string|max:512',
+            'hospital_branch' => 'required|in:kijabe,naivasha,westlands,marira',
         ];
 
-
-        $validated = $request->validate($rules);
-        // $validator = Validator::make($request->all(), $rules);
-
-        // if ($validator->fails()) {
-        //     \Log::error('Validation failed', $validator->errors()->toArray());
-        //     return redirect()->back()->withErrors($validator)->withInput();
-        // }
-
-        \Log::error('after validation');
-        \Log::error('Testing', ['name' => $validated['full_name']]);
-
-        // Determine the model
-        // if ($status === 'branch' && $source_table) {
-        //     $status = $source_table;
-        // }
-
-        $modelClass = BkAppointments::class;
-        if (!$modelClass) {
-            \Log::error('Invalid appointment status', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
-            return redirect()->back()->with('error', 'Invalid appointment status.');
+        try {
+            $validated = $request->validate($rules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::warning('Validation failed', ['errors' => $e->errors()]);
+            return redirect()->back()->withErrors($e->errors())->withInput();
         }
 
-        $appointment = $modelClass::find($id);
+        // Find the appointment
+        $appointment = BkAppointments::find($id);
         if (!$appointment) {
-            \Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'model' => $modelClass]);
+            Log::error('Appointment not found', ['id' => $id]);
             return redirect()->back()->with('error', 'Appointment not found.');
-        } else {
-            $appointment = $this->findAppointmentById($id);
-            if (!$appointment) {
-                \Log::error('Appointment not found for update', ['id' => $id, 'status' => $status]);
-                return redirect()->back()->with('error', 'Appointment not found.');
-            }
-            //$status = $this->getStatusFromModel($appointment); //Status: local, external, ...
         }
 
-        // Check daily limits for specialization
-        $specialization = BkSpecializations::where('name', $validated['specialization'])->first();
+        // Check specialization
+        $specialization = BkSpecializations::where('name', $validated['specialization'])
+            ->where('hospital_branch', $appointment->hospital_branch ?? $validated['hospital_branch'])
+            ->first();
         if (!$specialization) {
-            \Log::error('[Error] getting the specialization');
+            Log::error('Specialization not found', [
+                'specialization' => $validated['specialization'],
+                'hospital_branch' => $appointment->hospital_branch ?? $validated['hospital_branch']
+            ]);
+            return redirect()->back()->with('error', 'Specialization not found.')->withInput();
         }
 
+        // Check daily limits
+        if ($specialization->limits) {
+            $currentBookings = $this->getActiveBookingsForDate($validated['specialization'], $validated['appointment_date']);
+            if ($currentBookings >= $specialization->limits) {
+                $alternativeDates = $this->getAlternativeDates(
+                    $validated['specialization'],
+                    $appointment->hospital_branch ?? $validated['hospital_branch'],
+                    $specialization->limits,
+                    $specialization->day_of_week,
+                    $validated['appointment_date']
+                );
+                Log::warning('Rescheduling limit exceeded', [
+                    'specialization' => $validated['specialization'],
+                    'date' => $validated['appointment_date'],
+                    'current_bookings' => $currentBookings,
+                    'limit' => $specialization->limits,
+                ]);
+                return redirect()->back()->with('error', "Cannot reschedule appointment. The daily limit of {$specialization->limits} appointments for {$validated['specialization']} on {$validated['appointment_date']} has been reached.")->with('suggested_dates', $alternativeDates)->withInput();
+            }
+        }
 
-        // Prepare the update data
+        // Generate unique appointment number
+        do {
+            $appointmentNumber = 'APPT-' . date('Y') . '-' . Str::upper(Str::random(8));
+        } while (BkAppointments::where('appointment_number', $appointmentNumber)->exists());
 
-        $appointmentNumber = 'APPT-' . date('Y') . '-' . Str::upper(Str::random(8));
+        // Prepare new appointment data
         $newAppointmentData = [
             'appointment_number' => $appointmentNumber,
             'full_name' => $validated['full_name'],
@@ -1752,85 +2106,60 @@ class BookingController extends Controller
             'email' => $validated['email'],
             'phone' => $validated['phone'],
             'appointment_date' => $validated['appointment_date'],
-            'appointment_time' => $validated['appointment_time'] ? $validated['appointment_time'] : null,
+            'appointment_time' => $validated['appointment_time'] ? $validated['appointment_time'] . ($validated['appointment_time'] ? ':00' : '') : null,
             'specialization' => $specialization->id,
             'doctor_name' => $validated['doctor_name'],
             'booking_type' => $validated['booking_type'],
+            'hospital_branch' => $appointment->hospital_branch ?? $validated['hospital_branch'],
+            'appointment_status' => 'pending',
         ];
 
-        if (!$appointment) {
-            \Log::error('Current appointment not found for rescheduling', ['id' => $id]);
-            return redirect()->back()->with('error', 'Rescheduling appointment not found.');
-        }
-
-        \DB::beginTransaction();
-        \Log::error('[info] Starting the Transaction');
+        DB::beginTransaction();
+        Log::info('Starting reschedule transaction', ['id' => $id]);
 
         try {
-            $targetModel = BkAppointments::class;
-
-
-            // Only include doctor_comments for ExternalApproved
-
-            //update the current appointment status to rescheduled.
+            // Update original appointment status
+            Log::info('Updating original appointment to rescheduled', ['id' => $appointment->id]);
             $appointment->appointment_status = 'rescheduled';
             $appointment->save();
 
-            //create a  new appointment
-            $newAppointment = $targetModel::create($newAppointmentData);
+            // Create new appointment
+            Log::info('Creating new appointment', ['data' => $newAppointmentData]);
+            $newAppointment = BkAppointments::create($newAppointmentData);
             if (!$newAppointment) {
-                throw new \Exception('Failed to Create the new appointment to the database.');
+                throw new \Exception('Failed to create new appointment.');
             }
+            Log::info('New appointment created', ['id' => $newAppointment->id]);
 
-            \Log::debug('New appointment record created', $newAppointment->toArray());
-
-            //create the Reschedule record
+            // Create reschedule record
             $rescheduled_data = [
                 'appointment_id' => $appointment->id,
                 're_appointment_id' => $newAppointment->id,
-                'reason' => $validated['reason']
+                'reason' => $validated['reason'],
             ];
-
+            Log::info('Creating reschedule record', ['data' => $rescheduled_data]);
             $rescheduled_record = BkRescheduledAppointments::create($rescheduled_data);
             if (!$rescheduled_record) {
-                throw new \Exception('Failed to create the reschedule record.');
+                throw new \Exception('Failed to create reschedule record.');
             }
+            Log::info('Reschedule record created', ['id' => $rescheduled_record->id]);
 
-            // // Prepare email data
-            // $emailData = $reapprovedData;
-            // $emailData['message'] = 'Your previously cancelled appointment has been reapproved.';
-            // $emailData['subject'] = 'Appointment Re-approval';
-
-            // // Send re-approval email
-            // if ($reapprovedAppointment->email && $reapprovedAppointment->email !== 'N/A') {
-            //     Mail::to($reapprovedAppointment->email)->send(new ContactFormMail($emailData));
-            //     \Log::info("Re-approval email sent to {$reapprovedAppointment->email} for appointment ID: {$reapprovedAppointment->id}");
-            // }
-
-            \DB::commit();
-
-            \Log::info('Appointment rescheduling was successfully', [
-                'id' => $rescheduled_record->id,
-                'booking_id' => $rescheduled_record->appointment_id,
-            ]);
+            DB::commit();
+            Log::info('Reschedule transaction committed', ['id' => $rescheduled_record->id]);
 
             $status = $newAppointment->booking_type === 'post_op' ? 'postop' : $newAppointment->booking_type;
-            return redirect()->route('booking.dashboard.status', $status)
-                ->with('success', 'Appointment rescheduled successfully.');
+            return redirect()->route('booking.dashboard.status', $status)->with('success', 'Appointment rescheduled successfully.');
         } catch (\Exception $e) {
-            \DB::rollBack();
-
-            \Log::error('Failed to reapprove appointment', [
+            DB::rollBack();
+            Log::error('Failed to reschedule appointment', [
+                'id' => $id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'input' => $request->all(),
-                'reapproved_data' => $reapprovedData ?? null,
             ]);
-
-            return redirect()->back()->with('error', 'Failed to reapprove appointment: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to reschedule appointment: ' . $e->getMessage())->withInput();
         }
     }
-
     public function reapproveAppointment(Request $request, $id)
     {
         $cancelledAppointment = CancelledAppointment::find($id);
@@ -2296,13 +2625,6 @@ class BookingController extends Controller
         $specialization->group_id = $spec_group->id;
         $specialization->day_of_week = $validated['day_of_week'];
         $specialization->save();
-
-        \Log::info("Specialization limit updated", [
-            'specialization' => $specialization->name,
-            'new_limit' => $specialization->limits,
-            'day_of_week' => $specialization->day_of_week,
-        ]);
-
         return redirect()->back()->with('success', 'Daily limit updated successfully.');
     }
 
@@ -3186,7 +3508,6 @@ class BookingController extends Controller
                     \Log::warning("No appointments found in entire bk_appointments table!");
                 }
             }
-
         } catch (\Exception $e) {
             \Log::error("Query failed for branch {$branchName}: " . $e->getMessage(), [
                 'user_branch' => $userBranch,
@@ -3365,12 +3686,9 @@ class BookingController extends Controller
 
             \Log::info('Fetched hospital_branch enum values from bk_appointments:', ['values' => $enumValues]);
             return $enumValues;
-
         } catch (\Exception $e) {
             \Log::error('Error fetching enum values: ' . $e->getMessage());
             return ['kijabe', 'naivasha', 'westlands', 'marira'];
         }
     }
-
 }
-

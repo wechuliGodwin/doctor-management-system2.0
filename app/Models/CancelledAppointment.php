@@ -12,19 +12,26 @@ class CancelledAppointment extends Model
     protected $fillable = [
         'patient_number',
         'booking_id',
-        'name',
+        'full_name',
         'email',
         'phone',
         'specialization',
-        'doctor',
+        'doctor_name',
         'appointment_date',
         'appointment_time',
         'hospital_branch',
         'remarks',
         'notes',
-        'cancellation_reason'
+        'cancellation_reason',
+        'cancelled_at',
+        'appointment_number',
+        'appointment_status',
+        'booking_type'
     ];
-
+    protected $casts = [
+        'appointment_date' => 'date',
+        'cancelled_at' => 'datetime'
+    ];
     public function approvedAppointment()
     {
         return $this->belongsTo(ExternalApproved::class, 'booking_id', 'booking_id');

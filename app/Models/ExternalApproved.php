@@ -26,6 +26,12 @@ class ExternalApproved extends Model
         'doctor_comments',
         'booking_type',
     ];
+
+    protected $table = 'external_approveds';
+    protected $guarded = [];
+
+    // Ensure created_at is treated as a timestamp
+    protected $dates = ['created_at', 'updated_at', 'appointment_date'];
     protected $attributes = [
         'appointment_status' => 'pending', // Default value
     ];
