@@ -250,7 +250,8 @@
                         <div class="col-md-6">
                             <label for="phone" class="form-label" style="font-weight: normal;">Phone Number</label>
                             <input type="tel" class="form-control form-control-sm" id="phone" name="phone" required
-                                placeholder="Enter number" style="font-weight: normal; font-family: Arial, sans-serif; font-size: 14px;">
+                                placeholder="Enter number (e.g., 0724472700)" pattern="\d{10,15}"
+                                title="Phone number must be 10-15 digits" style="font-weight: normal; font-family: Arial, sans-serif; font-size: 14px;">
                         </div>
                     </div>
 

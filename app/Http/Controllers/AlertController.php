@@ -252,14 +252,32 @@ class AlertController extends Controller
                 ], 409);
             }
 
+            // Handle multiple phone numbers by selecting the first one
+            $phone = $appointment->phone;
+            if (strpos($phone, '|') !== false) {
+                $phoneNumbers = explode('|', $phone);
+                $phone = trim($phoneNumbers[0]); // Use the first phone number
+            }
+
+            // Validate phone number format (e.g., numeric and reasonable length)
+            if (!preg_match('/^\d{10,15}$/', $phone)) {
+                Log::error('Invalid phone number format', [
+                    'appointment_id' => $validated['appointment_id'],
+                    'phone' => $phone
+                ]);
+                return response()->json([
+                    'error' => 'Invalid phone number format. Please ensure the patient has a valid phone number.'
+                ], 422);
+            }
+
             // Use database transaction for consistency
-            DB::transaction(function () use ($validated, $userBranch, $appointment) {
+            DB::transaction(function () use ($validated, $userBranch, $appointment, $phone) {
                 $alert = BkMessaging::create([
                     'appointment_id' => $validated['appointment_id'],
                     'is_new_patient' => 0,
                     'patient_name' => $appointment->full_name,
                     'patient_number' => $appointment->patient_number,
-                    'phone' => $appointment->phone,
+                    'phone' => $phone, // Use the sanitized phone number
                     'urgent_message' => $validated['urgent_message'],
                     'sender_name' => $validated['sender_name'],
                     'sender_department' => $validated['sender_department'],
@@ -336,7 +354,7 @@ class AlertController extends Controller
             $validated = $request->validate([
                 'patient_name' => 'required|string|max:255',
                 'patient_number' => 'nullable|string|max:32',
-                'phone' => 'required|numeric|digits_between:10,15',
+                'phone' => 'required|string|regex:/^\d{10,15}$/', // Validate phone number
                 'urgent_message' => 'required|string|max:1000',
                 'sender_name' => 'required|string|max:255',
                 'sender_department' => 'required|string|max:64',
@@ -368,7 +386,7 @@ class AlertController extends Controller
                     'is_new_patient' => 1,
                     'patient_name' => $validated['patient_name'],
                     'patient_number' => $validated['patient_number'] ?? null,
-                    'phone' => $validated['phone'],
+                    'phone' => $validated['phone'], // Use validated phone
                     'urgent_message' => $validated['urgent_message'],
                     'sender_name' => $validated['sender_name'],
                     'sender_department' => $validated['sender_department'],

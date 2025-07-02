@@ -1337,6 +1337,14 @@ class BookingController extends Controller
         $specializations = BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
 
         $appointment = null;
+        $source_table = request()->input('source_table', $status);
+
+        // Validate and map status for external_pending_approvals
+        if ($status === 'all' || $status === 'external_pending_approvals') {
+            if ($source_table === 'external_pending_approvals') {
+                $status = 'external_pending'; // Map to external_pending for querying
+            }
+        }
 
         switch ($status) {
             case 'new':
@@ -1345,7 +1353,7 @@ class BookingController extends Controller
                 $appointment = BkAppointments::query()
                     ->select([
                         'bk_appointments.*',
-                        'bk_specializations.name as specialization', // Fetch name instead of ID
+                        'bk_specializations.name as specialization',
                     ])
                     ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                     ->where('bk_appointments.id', $id)
@@ -1358,7 +1366,7 @@ class BookingController extends Controller
                 $appointment = ExternalApproved::query()
                     ->select([
                         'external_approveds.*',
-                        'bk_specializations.name as specialization', // Ensure name is used
+                        'bk_specializations.name as specialization',
                     ])
                     ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
                     ->where('external_approveds.id', $id)
@@ -1368,16 +1376,19 @@ class BookingController extends Controller
                 $appointment = CancelledAppointment::find($id);
                 break;
             default:
-                Log::warning("Invalid status for view: {$status}", ['id' => $id]);
+                \Log::warning("Invalid status for view: {$status}", ['id' => $id, 'source_table' => $source_table]);
                 return response()->json(['error' => 'Invalid status provided.'], 400);
         }
 
         if (!$appointment) {
-            Log::error('Appointment not found', ['id' => $id, 'status' => $status]);
+            \Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
             return response()->json(['error' => 'Appointment not found.'], 404);
         }
 
-        Log::info("Viewing appointment ID: {$id} with status: {$status}", [
+        // Add source_table to appointment for frontend use
+        $appointment->source_table = $source_table;
+
+        \Log::info("Viewing appointment ID: {$id} with status: {$status}", [
             'email' => $appointment->email ?? 'Not set',
             'doctor_comments' => $appointment->doctor_comments ?? 'Not set',
             'specialization' => $appointment->specialization ?? 'Not set',
@@ -1443,7 +1454,7 @@ class BookingController extends Controller
         if ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled') && ($appointment->appointment_status ?? '') !== 'cancelled') {
             $footerHtml .= '
             <button type="button" class="btn btn-sm btn-info openRescheduleModal" style="background-color: #6c757d;" data-bs-toggle="modal" data-bs-target="#rescheduleAppointmentModal"
-                data-action="' . route('booking.reschedule', [$appointment->id, 'all']) . '"
+                data-action="' . route('booking.reschedule', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '"
                 data-id="' . $appointment->id . '"
                 data-full_name="' . ($appointment->full_name ?? '') . '"
                 data-patient_number="' . ($appointment->patient_number ?? '') . '"
@@ -2073,25 +2084,25 @@ class BookingController extends Controller
         }
 
         // Check daily limits
-        if ($specialization->limits) {
-            $currentBookings = $this->getActiveBookingsForDate($validated['specialization'], $validated['appointment_date']);
-            if ($currentBookings >= $specialization->limits) {
-                $alternativeDates = $this->getAlternativeDates(
-                    $validated['specialization'],
-                    $appointment->hospital_branch ?? $validated['hospital_branch'],
-                    $specialization->limits,
-                    $specialization->day_of_week,
-                    $validated['appointment_date']
-                );
-                Log::warning('Rescheduling limit exceeded', [
-                    'specialization' => $validated['specialization'],
-                    'date' => $validated['appointment_date'],
-                    'current_bookings' => $currentBookings,
-                    'limit' => $specialization->limits,
-                ]);
-                return redirect()->back()->with('error', "Cannot reschedule appointment. The daily limit of {$specialization->limits} appointments for {$validated['specialization']} on {$validated['appointment_date']} has been reached.")->with('suggested_dates', $alternativeDates)->withInput();
-            }
-        }
+        // if ($specialization->limits) {
+        //     $currentBookings = $this->getActiveBookingsForDate($validated['specialization'], $validated['appointment_date']);
+        //     if ($currentBookings >= $specialization->limits) {
+        //         $alternativeDates = $this->getAlternativeDates(
+        //             $validated['specialization'],
+        //             $appointment->hospital_branch ?? $validated['hospital_branch'],
+        //             $specialization->limits,
+        //             $specialization->day_of_week,
+        //             $validated['appointment_date']
+        //         );
+        //         Log::warning('Rescheduling limit exceeded', [
+        //             'specialization' => $validated['specialization'],
+        //             'date' => $validated['appointment_date'],
+        //             'current_bookings' => $currentBookings,
+        //             'limit' => $specialization->limits,
+        //         ]);
+        //         return redirect()->back()->with('error', "Cannot reschedule appointment. The daily limit of {$specialization->limits} appointments for {$validated['specialization']} on {$validated['appointment_date']} has been reached.")->with('suggested_dates', $alternativeDates)->withInput();
+        //     }
+        // }
 
         // Generate unique appointment number
         do {
