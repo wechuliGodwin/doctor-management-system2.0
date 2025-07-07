@@ -40,4 +40,8 @@ class BkAppointments extends Model
     {
         return $this->hasMany(BkMessaging::class, 'appointment_id', 'id');
     }
+    public function specialization()
+    {
+        return $this->belongsTo(BkSpecializations::class, 'specialization', 'id');
+    }
 }
