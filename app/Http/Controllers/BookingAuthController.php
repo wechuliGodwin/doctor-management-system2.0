@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\BookingUserAuth;
+use App\Models\BkDoctor;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Password;
@@ -34,16 +35,16 @@ class BookingAuthController extends Controller
             }
             return $next($request);
         })->only([
-                    'index',
-                    'create',
-                    'store',
-                    'edit',
-                    'update',
-                    'showChangePasswordForm',
-                    'changePassword',
-                    'toggleStatus',
-                    'destroy'
-                ]);
+            'index',
+            'create',
+            'store',
+            'edit',
+            'update',
+            'showChangePasswordForm',
+            'changePassword',
+            'toggleStatus',
+            'destroy'
+        ]);
     }
 
     /**
@@ -286,7 +287,7 @@ class BookingAuthController extends Controller
 
         return back()->with('success', "User {$status} successfully.");
     }
-    
+
 
     /**
      * Delete user (soft delete or permanent based on requirements)
@@ -466,6 +467,178 @@ class BookingAuthController extends Controller
         return $status === Password::PASSWORD_RESET
             ? redirect()->route('booking.login')->with('status', 'Password has been reset successfully.')
             : back()->withErrors(['email' => __($status)]);
+    }
+
+    /**
+     * Display a listing of doctors
+     */
+    public function doctorsIndex(Request $request)
+    {
+        $currentUser = Auth::guard('booking')->user();
+        $query = BkDoctor::query();
+
+        // Role-based filtering
+        if ($currentUser->role === 'admin') {
+            $query->where('hospital_branch', $currentUser->hospital_branch);
+        }
+
+        // Search functionality
+        if ($request->filled('search')) {
+            $search = $request->get('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('doctor_name', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
+
+        // Hospital branch filter (only for superadmin)
+        if ($request->filled('branch_filter') && $currentUser->role === 'superadmin') {
+            $query->where('hospital_branch', $request->get('branch_filter'));
+        }
+
+        // Department filter
+        if ($request->filled('department_filter')) {
+            $query->where('department', $request->get('department_filter'));
+        }
+
+        $doctors = $query->orderBy('doctor_name')->paginate(15);
+        $hospital_branches = $this->getHospitalBranchEnumValues();
+        $departments = $this->getDepartmentEnumValues();
+
+        return view('booking.auth.doctors.index', compact('doctors', 'hospital_branches', 'departments', 'currentUser'));
+    }
+
+    /**
+     * Show the form for creating a new doctor
+     */
+    public function doctorCreate()
+    {
+        $hospital_branches = $this->getHospitalBranchEnumValues();
+        $departments = $this->getDepartmentEnumValues();
+        $roles = $this->getUserRolesEnumValues();
+
+        return view('booking.auth.doctors.create', compact('hospital_branches', 'departments', 'roles'));
+    }
+
+    /**
+     * Store a newly created doctor
+     */
+    public function doctorStore(Request $request)
+    {
+        $currentUser = Auth::guard('booking')->user();
+
+        $validated = $request->validate([
+            'doctor_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:bk_doctor,email', 'unique:booking_user_auth,email'],
+            'phone' => ['required', 'string', 'max:20'],
+            'hospital_branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+            'department' => ['required', 'in:' . implode(',', $this->getDepartmentEnumValues())],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'role' => ['required', 'in:' . implode(',', $this->getUserRolesEnumValues())],
+        ]);
+
+        // Admins can only create doctors for their own hospital branch
+        if ($currentUser->role === 'admin') {
+            $validated['hospital_branch'] = $currentUser->hospital_branch;
+        }
+
+        // Create doctor
+        $doctor = BkDoctor::create([
+            'doctor_name' => $validated['doctor_name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'hospital_branch' => $validated['hospital_branch'],
+            'department' => $validated['department'],
+        ]);
+
+        // Create associated user account
+        $user = BookingUserAuth::create([
+            'full_name' => $validated['doctor_name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'role' => $validated['role'],
+            'hospital_branch' => $validated['hospital_branch'],
+            'is_active' => true,
+        ]);
+
+        Log::info('Doctor and user account created', [
+            'doctor_id' => $doctor->id,
+            'user_id' => $user->id,
+            'created_by' => $currentUser->id,
+            'email' => $doctor->email,
+        ]);
+
+        return redirect()->route('booking.auth.doctors.index')->with('success', 'Doctor created successfully.');
+    }
+
+    /**
+     * Show the form for editing a doctor
+     */
+    public function doctorEdit($id)
+    {
+        $currentUser = Auth::guard('booking')->user();
+        $doctor = BkDoctor::findOrFail($id);
+
+        if ($currentUser->role === 'admin' && $doctor->hospital_branch !== $currentUser->hospital_branch) {
+            abort(403, 'You can only edit doctors from your hospital branch.');
+        }
+
+        $hospital_branches = $this->getHospitalBranchEnumValues();
+        $departments = $this->getDepartmentEnumValues();
+
+        return view('booking.auth.doctors.edit', compact('doctor', 'hospital_branches', 'departments', 'currentUser'));
+    }
+
+    /**
+     * Update doctor details
+     */
+    public function doctorUpdate(Request $request, $id)
+    {
+        $currentUser = Auth::guard('booking')->user();
+        $doctor = BkDoctor::findOrFail($id);
+
+        if ($currentUser->role === 'admin' && $doctor->hospital_branch !== $currentUser->hospital_branch) {
+            abort(403, 'You can only edit doctors from your hospital branch.');
+        }
+
+        $validated = $request->validate([
+            'doctor_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('bk_doctor')->ignore($doctor->id)],
+            'phone' => ['required', 'string', 'max:20'],
+            'hospital_branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+            'department' => ['required', 'in:' . implode(',', $this->getDepartmentEnumValues())],
+        ]);
+
+        if ($currentUser->role === 'admin') {
+            unset($validated['hospital_branch']);
+        }
+
+        $doctor->update($validated);
+
+        // Update associated user account if exists
+        $user = BookingUserAuth::where('email', $doctor->email)->first();
+        if ($user) {
+            $user->update([
+                'full_name' => $validated['doctor_name'],
+                'email' => $validated['email'],
+                'hospital_branch' => $validated['hospital_branch'] ?? $user->hospital_branch,
+            ]);
+        }
+
+        Log::info('Doctor updated', [
+            'doctor_id' => $doctor->id,
+            'updated_by' => $currentUser->id,
+        ]);
+
+        return redirect()->route('booking.auth.doctors.index')->with('success', 'Doctor updated successfully.');
+    }
+
+    /**
+     * Get department enum values
+     */
+    protected function getDepartmentEnumValues()
+    {
+        return ['cardiology', 'neurology', 'orthopedics', 'pediatrics', 'general'];
     }
 
     /**

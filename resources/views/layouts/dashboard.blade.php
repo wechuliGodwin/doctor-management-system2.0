@@ -493,7 +493,7 @@
     </style>
     <script>
         // Show loader immediately on page load
-        (function () {
+        (function() {
             console.log('Loader: Initializing');
             const loaderOverlay = document.getElementById('loaderOverlay');
             if (loaderOverlay) {
@@ -531,16 +531,16 @@
             <div class="navbar-collapse " id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-center">
                     @auth('booking')
-                        <!-- Display User Name and Branch -->
-                        <li class="nav-item me-3">
-                            <span class="navbar-text text-white">
-                                {{ Auth::guard('booking')->user()->full_name }}
-                                ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
-                            </span>
-                        </li>
+                    <!-- Display User Name and Branch -->
+                    <li class="nav-item me-3">
+                        <span class="navbar-text text-white">
+                            {{ Auth::guard('booking')->user()->full_name }}
+                            ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
+                        </span>
+                    </li>
 
-                        <!-- Admin Branch Selector (only show if user is admin) -->
-                        <!-- @if(Auth::guard('booking')->user()->role === 'admin')
+                    <!-- Admin Branch Selector (only show if user is admin) -->
+                    <!-- @if(Auth::guard('booking')->user()->role === 'admin')
                                                                                 <li class="nav-item dropdown me-3">
                                                                                     <a class="nav-link dropdown-toggle text-white" href="#" id="branchDropdown" role="button"
                                                                                         data-bs-toggle="dropdown" aria-expanded="false">
@@ -572,49 +572,49 @@
                                                                                 </li>
                                                                             @endif -->
 
-                        <!-- Raise Alert Button (uncomment if needed) -->
-                        <!--
+                    <!-- Raise Alert Button (uncomment if needed) -->
+                    <!--
                                                                             <li class="nav-item me-3">
                                                                                 <button type="button" class="btn stylish-alert-btn" data-bs-toggle="modal"
                                                                                     data-bs-target="#raiseAlertModal">+ Raise Alert</button>
                                                                             </li>
                                                                             -->
 
-                        <!-- Settings Dropdown -->
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button"
-                                data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-cog"></i>
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item"
-                                        href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">Change
-                                        Password</a>
-                                </li>
-                                <li>
-                                    <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
-                                        @csrf
-                                        <button type="submit" class="dropdown-item">Logout</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </li>
+                    <!-- Settings Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-cog"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item"
+                                    href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">Change
+                                    Password</a>
+                            </li>
+                            <li>
+                                <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item">Logout</button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
                     @else
-                        <!-- Show login link if not authenticated -->
-                        <li class="nav-item">
-                            <a class="nav-link text-white" href="{{ route('booking.login') }}">Login</a>
-                        </li>
+                    <!-- Show login link if not authenticated -->
+                    <li class="nav-item">
+                        <a class="nav-link text-white" href="{{ route('booking.login') }}">Login</a>
+                    </li>
                     @endauth
                 </ul>
             </div>
         </div>
     </nav>
     @if($alertsCount)
-        <h5 class="alert-panel alert alert-danger">
-            <i class="fas fa-exclamation-triangle"></i>
-            You have {{ $alertsCount }} important {{ $alertsCount == 1 ? 'alert' : 'alerts' }},
-            click <a href="{{ route('booking.alerts') }}" class="text-primary text-decoration-underline">here</a> to view.
-        </h5>
+    <h5 class="alert-panel alert alert-danger">
+        <i class="fas fa-exclamation-triangle"></i>
+        You have {{ $alertsCount }} important {{ $alertsCount == 1 ? 'alert' : 'alerts' }},
+        click <a href="{{ route('booking.alerts') }}" class="text-primary text-decoration-underline">here</a> to view.
+    </h5>
     @endif
     <div id="react-alert-root" data-alerts-count="{{ $alertsCount }}" data-alerts-route="{{ route('booking.alerts') }}">
     </div>
@@ -665,21 +665,21 @@
                         </a>
                     </li>
                     @php
-                        $userBranch = Auth::guard('booking')->user()->hospital_branch;
+                    $userBranch = Auth::guard('booking')->user()->hospital_branch;
                     @endphp
                     @if ($userBranch === 'kijabe')
-                        <li>
-                            <a href="{{ route('booking.dashboard', 'external_pending') }}" class="submenu-item">
-                                <i class="fas fa-hourglass-half me-2"></i>
-                                <span class="menu-text">External Pending Approval</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('booking.dashboard', 'external_approved') }}" class="submenu-item">
-                                <i class="fas fa-check-circle me-2"></i>
-                                <span class="menu-text">External Approved</span>
-                            </a>
-                        </li>
+                    <li>
+                        <a href="{{ route('booking.dashboard', 'external_pending') }}" class="submenu-item">
+                            <i class="fas fa-hourglass-half me-2"></i>
+                            <span class="menu-text">External Pending Approval</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('booking.dashboard', 'external_approved') }}" class="submenu-item">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <span class="menu-text">External Approved</span>
+                        </a>
+                    </li>
                     @endif
                     <li>
                         <a href="{{ route('booking.dashboard', 'cancelled') }}" class="submenu-item">
@@ -702,39 +702,39 @@
                 </ul>
             </li>
             @if(Auth::guard('booking')->check() && Auth::guard('booking')->user()->role === 'superadmin')
-                <li class="has-submenu">
-                    <a href="javascript:void(0)" class="submenu-toggle">
-                        <i class="fas fa-hospital-alt"></i>
-                        <span class="menu-text">Satelites</span>
-                        <i class="fas fa-chevron-down submenu-indicator"></i>
-                    </a>
-                    <ul class="submenu">
-                        <li>
-                            <a href="{{ route('booking.branch', 'kijabe') }}" class="submenu-item">
-                                <i class="fas fa-hospital"></i>
-                                <span class="menu-text">Kijabe Main</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('booking.branch', 'westlands') }}" class="submenu-item">
-                                <i class="fas fa-city"></i>
-                                <span class="menu-text">Westlands Clinic</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('booking.branch', 'naivasha') }}" class="submenu-item">
-                                <i class="fas fa-building"></i>
-                                <span class="menu-text">Naivasha Clinic</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('booking.branch', 'marira') }}" class="submenu-item">
-                                <i class="fas fa-clinic-medical"></i>
-                                <span class="menu-text">Marira Clinic</span>
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+            <li class="has-submenu">
+                <a href="javascript:void(0)" class="submenu-toggle">
+                    <i class="fas fa-hospital-alt"></i>
+                    <span class="menu-text">Satelites</span>
+                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                </a>
+                <ul class="submenu">
+                    <li>
+                        <a href="{{ route('booking.branch', 'kijabe') }}" class="submenu-item">
+                            <i class="fas fa-hospital"></i>
+                            <span class="menu-text">Kijabe Main</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('booking.branch', 'westlands') }}" class="submenu-item">
+                            <i class="fas fa-city"></i>
+                            <span class="menu-text">Westlands Clinic</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('booking.branch', 'naivasha') }}" class="submenu-item">
+                            <i class="fas fa-building"></i>
+                            <span class="menu-text">Naivasha Clinic</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('booking.branch', 'marira') }}" class="submenu-item">
+                            <i class="fas fa-clinic-medical"></i>
+                            <span class="menu-text">Marira Clinic</span>
+                        </a>
+                    </li>
+                </ul>
+            </li>
             @endif
             <li class="has-submenu">
                 <a href="javascript:void(0)" class="submenu-toggle">
@@ -761,10 +761,10 @@
                             href="{{ route('booking.reminders') }}">
                             <i class="fas fa-bell me-2"></i> Reminders
                             @if(isset($reminderCount) && $reminderCount > 0)
-                                <span class="badge rounded-pill ms-2" id="reminderAlert"
-                                    style="background-color: #e53935; color: white;">
-                                    {{ $reminderCount }}
-                                </span>
+                            <span class="badge rounded-pill ms-2" id="reminderAlert"
+                                style="background-color: #e53935; color: white;">
+                                {{ $reminderCount }}
+                            </span>
                             @endif
                         </a>
                     </li>
@@ -795,19 +795,27 @@
                         Limits</span></a></li>
 
             @if (Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['admin', 'superadmin']))
-                <li class="has-submenu">
-                    <a href="javascript:void(0)" class="submenu-toggle">
-                        <i class="fas fa-cog"></i>
-                        <span class="menu-text">Account</span>
-                        <i class="fas fa-chevron-down submenu-indicator"></i>
-                    </a>
-                    <ul class="submenu">
-                        <li><a href="{{ route('booking.auth.users.index') }}" class="submenu-item">
-                                <i class="fas fa-user"></i>
-                                <span class="menu-text">Manage user</span> </a>
-                        </li>
-                    </ul>
-                </li>
+            <li class="has-submenu">
+                <a href="javascript:void(0)" class="submenu-toggle">
+                    <i class="fas fa-cog"></i>
+                    <span class="menu-text">Account</span>
+                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                </a>
+                <ul class="submenu">
+                    <li><a href="{{ route('booking.auth.users.index') }}" class="submenu-item">
+                            <i class="fas fa-user"></i>
+                            <span class="menu-text">User Management</span> </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="submenu-item {{ request()->routeIs('booking.auth.doctors.*') ? 'active' : '' }}"
+                            href="{{ route('booking.auth.doctors.index') }}">
+                            <i class="fas fa-user-md me-2"></i>
+                            Doctor Management
+                        </a>
+                    </li>
+                </ul>
+            </li>
             @endif
         </ul>
     </div>
@@ -827,7 +835,7 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             console.log('Loader: DOMContentLoaded');
 
             // Submenu toggle functionality
@@ -841,7 +849,7 @@
                     submenu.classList.add('show');
                     toggle.classList.add('active');
                 }
-                toggle.addEventListener('click', function (e) {
+                toggle.addEventListener('click', function(e) {
                     e.preventDefault();
                     const isOpen = submenu.classList.contains('show');
                     submenu.classList.toggle('show');
@@ -849,7 +857,7 @@
                     localStorage.setItem(`submenuOpen_${submenuId}`, !isOpen);
                 });
                 submenuItems.forEach(item => {
-                    item.addEventListener('click', function (e) {
+                    item.addEventListener('click', function(e) {
                         localStorage.setItem(`submenuOpen_${submenuId}`, 'true');
                     });
                 });
@@ -862,7 +870,7 @@
             const footer = document.querySelector('.footer');
             const toggleBtn = document.getElementById('sidebarToggle');
 
-            toggleBtn.addEventListener('click', function () {
+            toggleBtn.addEventListener('click', function() {
                 sidebar.classList.toggle('hidden');
                 navbar.classList.toggle('hidden-sidebar');
                 mainContent.classList.toggle('hidden-sidebar');
@@ -881,7 +889,7 @@
             }
 
             sidebarLinks.forEach(link => {
-                link.addEventListener('click', function (e) {
+                link.addEventListener('click', function(e) {
                     // Remove active class from all links
                     sidebarLinks.forEach(l => l.classList.remove('active'));
                     // Add active class to the clicked link
@@ -926,7 +934,7 @@
 
             // Show loader for form submissions
             document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', function () {
+                form.addEventListener('submit', function() {
                     console.log('Loader: Showing for form submission');
                     loaderOverlay.classList.add('active');
                     sessionStorage.setItem('loaderActive', 'true');
@@ -938,7 +946,7 @@
         });
 
         // Ensure loader stays active during page unload
-        window.addEventListener('beforeunload', function () {
+        window.addEventListener('beforeunload', function() {
             const loaderOverlay = document.getElementById('loaderOverlay');
             if (sessionStorage.getItem('loaderActive') === 'true') {
                 console.log('Loader: Persisting on beforeunload');

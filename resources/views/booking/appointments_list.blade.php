@@ -1090,18 +1090,17 @@
                         $('#modal_appointment_date').val(appointment.appointment_date ? moment(appointment.appointment_date).format('YYYY-MM-DD') : '');
                         $('#modal_appointment_time').val(appointment.appointment_time ? moment(appointment.appointment_time, 'HH:mm:ss').format('HH:mm') : '');
 
-                        // Normalize specialization value (convert to string and trim)
                         const specialization = String(appointment.specialization || '').trim();
-
-                        // Ensure the select option exists
                         const $specializationSelect = $('#modal_specialization');
                         $specializationSelect.prop('disabled', false); // Temporarily enable to set value
-                        if ($specializationSelect.find(`option[value="${specialization}"]`).length) {
-                            $specializationSelect.val(specialization);
-                        } else {
-                            console.warn(`Specialization "${specialization}" not found in select options`);
-                            $specializationSelect.val(''); // Reset if no match
+
+                        // Check if the specialization exists in the select options
+                        if (specialization && !$specializationSelect.find(`option[value="${specialization}"]`).length) {
+                            console.warn(`Specialization "${specialization}" not found in select options, adding dynamically`);
+                            // Add the specialization as a new option
+                            $specializationSelect.append(`<option value="${specialization}">${specialization}</option>`);
                         }
+                        $specializationSelect.val(specialization);
                         $specializationSelect.prop('disabled', true); // Re-disable after setting
                         $('#modal_specialization_hidden').val(specialization);
 
@@ -1386,14 +1385,14 @@
             $('#reschedule_appointment_time').val(data.appointment_time || '');
             $('#reschedule_hospital_branch').val(data.hospital_branch || '');
 
+            // Handle specialization
             const specialization = String(data.specialization || '').trim();
             const $specializationSelect = $('#reschedule_specialization');
-            if ($specializationSelect.find(`option[value="${specialization}"]`).length) {
-                $specializationSelect.val(specialization);
-            } else {
-                console.warn(`Specialization "${specialization}" not found in reschedule select options`);
-                $specializationSelect.val('');
+            if (specialization && !$specializationSelect.find(`option[value="${specialization}"]`).length) {
+                console.warn(`Specialization "${specialization}" not found in reschedule select options, adding dynamically`);
+                $specializationSelect.append(`<option value="${specialization}">${specialization}</option>`);
             }
+            $specializationSelect.val(specialization);
 
             $('#reschedule_doctor_name').val(data.doctor_name || '');
             $('#reschedule_booking_type').val(data.booking_type || '');

@@ -358,6 +358,14 @@ Route::prefix('booking')->name('booking.')->middleware(['auth:booking'])->group(
     Route::patch('users/{user}/toggle-status', [BookingAuthController::class, 'toggleStatus'])
         ->name('users.toggle-status');
 });
+// Doctor Management (admin/superadmin only)
+Route::prefix('auth/doctors')->name('booking.auth.doctors.')->group(function () {
+    Route::get('/', [BookingAuthController::class, 'doctorsIndex'])->name('index');
+    Route::get('/create', [BookingAuthController::class, 'doctorCreate'])->name('create');
+    Route::post('/', [BookingAuthController::class, 'doctorStore'])->name('store');
+    Route::get('/{id}/edit', [BookingAuthController::class, 'doctorEdit'])->name('edit');
+    Route::put('/{id}', [BookingAuthController::class, 'doctorUpdate'])->name('update');
+});
 Route::get('/booking/login', [BookingAuthController::class, 'showBookingLoginForm'])->name('booking.login');
 Route::post('/booking/login', [BookingAuthController::class, 'bookingLogin']);
 Route::post('/booking/logout', [BookingAuthController::class, 'bookingLogout'])->name('booking.logout');

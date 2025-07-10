@@ -82,27 +82,6 @@ class BookingDoctorController extends Controller
                             ->where('bk_appointments.appointment_date', $date)
                             ->where('bk_appointments.appointment_status', '!=', 'rescheduled');
 
-
-
-
-                        // $query = BkAppointments::query()
-                        //     ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
-                        //     ->select([
-                        //         'id',
-                        //         'appointment_number',
-                        //         'full_name',
-                        //         'appointment_date',
-                        //         'appointment_time',
-                        //         'booking_type',
-                        //         'appointment_status',
-                        //         'specialization',
-                        //         'bk_specializations.name as specialization_name',
-                        //         'doctor_name as doctor',
-                        //         'hospital_branch',
-                        //     ])
-                        //     ->where('appointment_date', $date)
-                        //     ->where('appointment_status', '!=', 'rescheduled');
-
                         if ($doctorId) {
                             $doctorName = BkDoctor::findOrFail($doctorId)->doctor_name;
                             $query->where('doctor_name', $doctorName);
