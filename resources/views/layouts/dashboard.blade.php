@@ -789,10 +789,20 @@
                     @endif
                 </a></li> -->
             <li><a href="{{ route('booking.search') }}"><i class="fas fa-search"></i> <span>Search</span></a></li>
-            <li><a href="{{ route('booking.reports') }}"><i class="fas fa-file-alt"></i> <span>Report</span></a>
+            <li class="has-submenu">
+                <a href="javascript:void(0)" class="submenu-toggle">
+                    <i class="fas fa-file-alt"></i>
+                    <span class="menu-text">Reports</span>
+                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                </a>
+                <ul class="submenu">
+                    <li><a href="{{ route('booking.reports') }}"><i class="fas fa-file-alt"></i> <span>Summery Report</span></a></li>
+                    <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>Detailed Report</span></a></li>
+                    <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>HMIS Report</span></a></li>
+                </ul>
             </li>
-            <li><a href="{{ route('booking.specialization.limits') }}"><i class="fas fa-chart-line"></i> <span>View
-                        Limits</span></a></li>
+
+            <li><a href="{{ route('booking.specialization.limits') }}"><i class="fas fa-chart-line"></i> <span>View Limits</span></a></li>
 
             @if (Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['admin', 'superadmin']))
             <li class="has-submenu">

@@ -329,6 +329,7 @@ Route::patch('/booking/specializations/{specialization_id}/limit', [BookingContr
 Route::get('/booking/specialization-counts', [BookingController::class, 'getSpecializationCounts'])->name('booking.getSpecializationCounts');
 
 Route::get('/booking/reports', [BookingController::class, 'reports'])->middleware('web', 'auth.booking')->name('booking.reports');
+Route::get('/booking/report-details', [BookingController::class, 'detailedReport'])->name('booking.detailed-report');
 Route::get('/booking/specialization-limits', [BookingController::class, 'specializationLimits'])->middleware('web', 'auth.booking')->name('booking.specialization.limits');
 Route::post('/booking/specialization-limits/update', [BookingController::class, 'updateSpecializationLimit'])->middleware('web', 'auth.booking')->name('booking.specialization.update.limit');
 //calender

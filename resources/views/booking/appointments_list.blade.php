@@ -577,6 +577,27 @@
             render: () => '<input type="checkbox" class="row-checkbox">'
         };
 
+        const hmisVisitStatusColumn = {
+            data: 'hmis_visit_status',
+            orderable: false,
+            render: (data) => {
+                switch (data) {
+                    case 'pending':
+                        return `<span class="badge bg-secondary">Pending</span>`;
+                    case 'honoured':
+                        return `<span class="badge bg-success">Honoured</span>`;
+                    case 'missed':
+                        return `<span class="badge bg-danger">Missed</span>`;
+                    case 'late':
+                        return `<span class="badge bg-warning">Late</span>`;
+                    case 'cancelled':
+                        return `<span class="badge bg-dark">Cancelled</span>`;
+                    default:
+                        return `<span class="badge bg-info">${data}</span>`;
+                }
+            }
+        }
+
         const tracingColumn = {
             data: null,
             orderable: false,
@@ -938,6 +959,7 @@
                     data: 'appointment_number',
                     defaultContent: '-'
                 },
+
                 {
                     data: 'full_name',
                     defaultContent: '-'
@@ -983,6 +1005,7 @@
                     data: 'appointment_status',
                     defaultContent: '-'
                 },
+                hmisVisitStatusColumn,
                 {
                     data: null,
                     orderable: false,

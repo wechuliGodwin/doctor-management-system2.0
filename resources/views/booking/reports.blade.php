@@ -228,10 +228,10 @@
 
 <div class="dashboard-container">
     <!-- Header -->
-    <div class="header">
+    <!-- <div class="header">
         <h1>Specialization Performance Reports</h1>
         <p>Analyze appointment trends by specialization and branch</p>
-    </div>
+    </div> -->
 
     <!-- Filters Section -->
     <div class="filters-section">
@@ -283,7 +283,7 @@
 
     <!-- Specialization Report Section -->
     <div class="section-header">
-        <h2>Specialization Performance</h2>
+        <h2>Specialization Performance Report</h2>
     </div>
     @if ($specializationData->isEmpty())
     <div class="no-data-message">No specialization data available for the selected filters.</div>
@@ -406,7 +406,7 @@
     </div>
     @endif
     @endif
-    
+
 </div>
 
 <!-- Chart.js CDN -->
@@ -425,7 +425,7 @@
     toggleCustomDateRange();
 
     // Branch Chart (Superadmins Only) - Pie Chart
-    @if($isSuperadmin && !$branchData->isEmpty())
+    @if($isSuperadmin && !$branchData -> isEmpty())
     const branchChartData = @json($branchChartData);
     console.log('Branch Chart Data:', branchChartData); // Debug: Log branch chart data
 
@@ -477,7 +477,7 @@
     @endif
 
     // Specialization Performance Chart (Top 10)
-    @if(!$specializationData->isEmpty())
+    @if(!$specializationData -> isEmpty())
     const chartData = @json($chartData);
     console.log('Specialization Chart Data:', chartData); // Debug: Log specialization chart data
 

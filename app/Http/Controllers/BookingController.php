@@ -91,6 +91,7 @@ class BookingController extends Controller
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
             'time_period' => 'nullable|in:day,month,year,custom',
             'specialization' => 'nullable|exists:bk_specializations,id',
+            'doctor' => 'nullable|exists:bk_doctor,id',
         ];
 
         if ($isSuperadmin) {
@@ -130,96 +131,129 @@ class BookingController extends Controller
 
         // Fetch hospital branches and specializations
         $hospitalBranches = $this->getHospitalBranchEnumValues();
-        $specializations = BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
+        $specializations = $isSuperadmin
+            ? BkSpecializations::select('id', 'name', 'hospital_branch')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($spec) {
+                $spec->display_name = $spec->name . ' (' . ucfirst($spec->hospital_branch) . ')';
+                return $spec;
+            })
+            : BkSpecializations::where('hospital_branch', $userBranch)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($spec) {
+                $spec->display_name = $spec->name;
+                return $spec;
+            });
+
+        // Fetch doctors
+        $doctors = $isSuperadmin
+            ? BkDoctor::select('id', 'doctor_name', 'hospital_branch')
+            ->orderBy('doctor_name')
+            ->get()
+            ->map(function ($doctor) {
+                $doctor->display_name = $doctor->doctor_name . ' - ' . ucfirst($doctor->hospital_branch);
+                return $doctor;
+            })
+            : BkDoctor::where('hospital_branch', $userBranch)
+            ->orderBy('doctor_name')
+            ->get()
+            ->map(function ($doctor) {
+                $doctor->display_name = $doctor->doctor_name;
+                return $doctor;
+            });
 
         // Fetch specialization performance data
         $query = BkSpecializations::query()
             ->select([
+                'bk_specializations.id as specialization_id',
                 'bk_specializations.name as specialization_name',
                 DB::raw("(
                     (SELECT COUNT(*) FROM bk_appointments a 
                      WHERE a.specialization = bk_specializations.id
-                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
+                     AND a.appointment_status != 'rescheduled'
+                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                     +
                     (SELECT COUNT(*) FROM external_approveds e 
                      WHERE e.specialization = bk_specializations.name
-                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") . 
-                     (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                     +
                     (SELECT COUNT(*) FROM external_pending_approvals epa 
                      WHERE epa.specialization = bk_specializations.name
-                     AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                     AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                     +
                     (SELECT COUNT(*) FROM cancelled_appointments c 
                      WHERE c.specialization = bk_specializations.name
-                     AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ")
+                     AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ")
                 ) as total_appointments"),
                 DB::raw("(
                     (SELECT COUNT(*) FROM bk_appointments a 
                      WHERE a.specialization = bk_specializations.id
                      AND a.appointment_status = 'pending'
-                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
+                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                     +
                     (SELECT COUNT(*) FROM external_approveds e 
                      WHERE e.specialization = bk_specializations.name
                      AND e.appointment_status = 'pending'
-                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") . 
-                     (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                 ) as confirmed_pending"),
                 DB::raw("(
                     (SELECT COUNT(*) FROM bk_appointments a 
                      WHERE a.specialization = bk_specializations.id
                      AND a.appointment_status IN ('honoured', 'early', 'late')
-                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
+                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                     +
                     (SELECT COUNT(*) FROM external_approveds e 
                      WHERE e.specialization = bk_specializations.name
                      AND e.appointment_status IN ('honoured', 'early', 'late')
-                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") . 
-                     (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                 ) as patients_seen"),
                 DB::raw("(
                     (SELECT COUNT(*) FROM bk_appointments a 
                      WHERE a.specialization = bk_specializations.id
                      AND a.appointment_status = 'missed'
-                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
+                     AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                     +
                     (SELECT COUNT(*) FROM external_approveds e 
                      WHERE e.specialization = bk_specializations.name
                      AND e.appointment_status = 'missed'
-                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") . 
-                     (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                 ) as missed"),
                 DB::raw("(SELECT COUNT(*) FROM cancelled_appointments c 
                          WHERE c.specialization = bk_specializations.name 
-                         AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                         ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ") as cancelled"),
+                         AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ") as cancelled"),
                 DB::raw("(SELECT COUNT(*) 
                          FROM bk_rescheduled_appointments r 
                          JOIN bk_appointments a ON r.appointment_id = a.id 
                          WHERE a.specialization = bk_specializations.id 
-                         AND r.rescheduled_at BETWEEN '$startDate' AND '$endDate'" . 
-                         ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ") as rescheduled"),
+                         AND r.created_at BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ") as rescheduled"),
                 DB::raw("(SELECT COUNT(*) FROM external_pending_approvals epa 
                          WHERE epa.specialization = bk_specializations.name 
                          AND epa.status = 'pending' 
-                         AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                         (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as pending_external_approvals"),
+                         AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as pending_external_approvals"),
                 DB::raw("(SELECT COUNT(*) FROM external_approveds e 
                          WHERE e.specialization = bk_specializations.name 
-                         AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" . 
-                         ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") . 
-                         (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as external_approved"),
+                         AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
+                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as external_approved"),
             ]);
 
         if ($selectedBranch) {
@@ -259,6 +293,7 @@ class BookingController extends Controller
                     DB::raw('COUNT(*) as total_bookings'),
                 ])
                 ->whereBetween('appointment_date', [$startDate, $endDate])
+                ->where('appointment_status', '!=', 'rescheduled')
                 ->groupBy('hospital_branch')
                 ->union(
                     ExternalApproved::query()
@@ -278,6 +313,7 @@ class BookingController extends Controller
                         DB::raw('COUNT(*) as total_bookings'),
                     ])
                     ->where('specialization', $selectedSpecialization)
+                    ->where('appointment_status', '!=', 'rescheduled')
                     ->whereBetween('appointment_date', [$startDate, $endDate])
                     ->groupBy('hospital_branch')
                     ->union(
@@ -316,121 +352,121 @@ class BookingController extends Controller
         }
 
         // Fetch daily booking rate data
-        $dailyBookingQuery = BkAppointments::query()
+        $dailyBookingQuery = DB::query()
             ->select([
                 DB::raw('DATE(appointment_date) as booking_date'),
-                DB::raw('COUNT(*) as booking_count'),
+                DB::raw('COUNT(*) as total_bookings'),
             ])
-            ->whereBetween('appointment_date', [$startDate, $endDate])
-            ->groupBy('booking_date')
-            ->union(
-                ExternalApproved::query()
-                    ->select([
-                        DB::raw('DATE(appointment_date) as booking_date'),
-                        DB::raw('COUNT(*) as booking_count'),
-                    ])
+            ->fromSub(function ($query) use ($startDate, $endDate, $selectedBranch, $selectedSpecialization, $isSuperadmin, $userBranch) {
+                $query->from('bk_appointments')
+                    ->select('appointment_date')
                     ->whereBetween('appointment_date', [$startDate, $endDate])
-                    ->groupBy('booking_date')
-            );
-
-        if ($selectedBranch) {
-            $dailyBookingQuery = BkAppointments::query()
-                ->select([
-                    DB::raw('DATE(appointment_date) as booking_date'),
-                    DB::raw('COUNT(*) as booking_count'),
-                ])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->where('hospital_branch', $selectedBranch)
-                ->groupBy('booking_date')
-                ->union(
+                    ->where('appointment_status', '!=', 'rescheduled');
+                if ($selectedBranch) {
+                    $query->where('hospital_branch', $selectedBranch);
+                }
+                if ($selectedSpecialization) {
+                    $query->where('specialization', $selectedSpecialization);
+                }
+                $query->unionAll(
                     ExternalApproved::query()
-                        ->select([
-                            DB::raw('DATE(appointment_date) as booking_date'),
-                            DB::raw('COUNT(*) as booking_count'),
-                        ])
+                        ->select('appointment_date')
                         ->whereBetween('appointment_date', [$startDate, $endDate])
-                        ->where('hospital_branch', $selectedBranch)
-                        ->groupBy('booking_date')
-                );
-        }
-
-        if ($selectedSpecialization) {
-            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-            $dailyBookingQuery = BkAppointments::query()
-                ->select([
-                    DB::raw('DATE(appointment_date) as booking_date'),
-                    DB::raw('COUNT(*) as booking_count'),
-                ])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->where('specialization', $selectedSpecialization)
-                ->groupBy('booking_date')
-                ->union(
-                    ExternalApproved::query()
-                        ->select([
-                            DB::raw('DATE(appointment_date) as booking_date'),
-                            DB::raw('COUNT(*) as booking_count'),
-                        ])
-                        ->whereBetween('appointment_date', [$startDate, $endDate])
-                        ->where('specialization', $specName)
-                        ->groupBy('booking_date')
-                );
-            if ($selectedBranch) {
-                $dailyBookingQuery = BkAppointments::query()
-                    ->select([
-                        DB::raw('DATE(appointment_date) as booking_date'),
-                        DB::raw('COUNT(*) as booking_count'),
-                    ])
-                    ->whereBetween('appointment_date', [$startDate, $endDate])
-                    ->where('specialization', $selectedSpecialization)
-                    ->where('hospital_branch', $selectedBranch)
-                    ->groupBy('booking_date')
-                    ->union(
-                        ExternalApproved::query()
-                            ->select([
-                                DB::raw('DATE(appointment_date) as booking_date'),
-                                DB::raw('COUNT(*) as booking_count'),
-                            ])
+                        ->whereRaw(!$isSuperadmin && $userBranch !== 'kijabe' ? '1 = 0' : '1 = 1')
+                        ->when($selectedBranch, function ($q) use ($selectedBranch) {
+                            $q->where('hospital_branch', $selectedBranch);
+                        })
+                        ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
+                            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+                            $q->where('specialization', $specName);
+                        })
+                )
+                    ->unionAll(
+                        ExternalPendingApproval::query()
+                            ->select('appointment_date')
                             ->whereBetween('appointment_date', [$startDate, $endDate])
-                            ->where('specialization', $specName)
-                            ->where('hospital_branch', $selectedBranch)
-                            ->groupBy('booking_date')
+                            ->whereRaw(!$isSuperadmin && $userBranch !== 'kijabe' ? '1 = 0' : '1 = 1')
+                            ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
+                                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+                                $q->where('specialization', $specName);
+                            })
+                    )
+                    ->unionAll(
+                        CancelledAppointment::query()
+                            ->select('appointment_date')
+                            ->whereBetween('appointment_date', [$startDate, $endDate])
+                            ->when($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch'), function ($q) use ($selectedBranch) {
+                                $q->where('hospital_branch', $selectedBranch);
+                            })
+                            ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
+                                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+                                $q->where('specialization', $specName);
+                            })
                     );
-            }
-        }
-
-        if (!$isSuperadmin && $userBranch !== 'kijabe') {
-            $dailyBookingQuery = $dailyBookingQuery->union(
-                ExternalApproved::query()
-                    ->select([
-                        DB::raw('DATE(appointment_date) as booking_date'),
-                        DB::raw('0 as booking_count'),
-                    ])
-                    ->whereRaw('1 = 0')
-                    ->groupBy('booking_date')
-            );
-        }
+            }, 'combined')
+            ->groupBy(DB::raw('DATE(appointment_date)'))
+            ->orderBy('booking_date');
 
         try {
-            $dailyBookingData = $dailyBookingQuery->get()->groupBy('booking_date')->map(function ($group) {
-                return (object) [
-                    'booking_date' => $group->first()->booking_date,
-                    'booking_count' => $group->sum('booking_count'),
-                ];
-            })->sortBy('booking_date')->values();
+            $dailyBookingDataRaw = $dailyBookingQuery->get();
             Log::info('Daily booking rate data fetched', [
-                'count' => $dailyBookingData->count(),
+                'count' => $dailyBookingDataRaw->count(),
                 'branch' => $selectedBranch ?? 'all',
                 'specialization' => $selectedSpecialization ?? 'all',
                 'start_date' => $startDate,
                 'end_date' => $endDate,
             ]);
+
+            // Generate all dates in the range to ensure continuous data
+            $dateRange = collect();
+            $currentDate = Carbon::parse($startDate);
+            $end = Carbon::parse($endDate);
+            while ($currentDate->lte($end)) {
+                $dateRange->push($currentDate->toDateString());
+                $currentDate->addDay();
+            }
+
+            // Map booking data to dates, filling in zeros for missing dates
+            $dailyBookingData = $dateRange->map(function ($date) use ($dailyBookingDataRaw) {
+                $record = $dailyBookingDataRaw->firstWhere('booking_date', $date);
+                return [
+                    'booking_date' => $date,
+                    'total_bookings' => $record ? (int)$record->total_bookings : 0,
+                ];
+            });
+
+            $dailyBookingChartData = [
+                'labels' => $dailyBookingData->pluck('booking_date')->toArray(),
+                'datasets' => [
+                    [
+                        'label' => 'Daily Bookings',
+                        'data' => $dailyBookingData->pluck('total_bookings')->toArray(),
+                        'borderColor' => '#007bff',
+                        'backgroundColor' => 'rgba(0, 123, 255, 0.1)',
+                        'fill' => true,
+                        'tension' => 0.4,
+                    ],
+                ],
+            ];
         } catch (\Exception $e) {
             Log::error('Failed to fetch daily booking rate data: ' . $e->getMessage(), [
                 'sql' => $dailyBookingQuery->toSql(),
                 'bindings' => $dailyBookingQuery->getBindings(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $dailyBookingData = collect();
+            $dailyBookingChartData = [
+                'labels' => [],
+                'datasets' => [
+                    [
+                        'label' => 'Daily Bookings',
+                        'data' => [],
+                        'borderColor' => '#007bff',
+                        'backgroundColor' => 'rgba(0, 123, 255, 0.1)',
+                        'fill' => true,
+                        'tension' => 0.4,
+                    ],
+                ],
+            ];
         }
 
         // Prepare specialization chart data (top 10 specializations by total appointments)
@@ -512,22 +548,6 @@ class BookingController extends Controller
             ],
         ];
 
-        // Prepare daily booking rate chart data
-        $dailyBookingChartData = [
-            'labels' => $dailyBookingData->pluck('booking_date')->map(function ($date) {
-                return Carbon::parse($date)->format('Y-m-d');
-            })->toArray(),
-            'datasets' => [
-                [
-                    'label' => 'Daily Bookings',
-                    'data' => $dailyBookingData->pluck('booking_count')->toArray(),
-                    'fill' => false,
-                    'borderColor' => '#007bff',
-                    'tension' => 0.1,
-                ],
-            ],
-        ];
-
         // Prepare data for the view
         $data = [
             'title' => 'Specialization Performance Reports',
@@ -538,6 +558,7 @@ class BookingController extends Controller
             'dailyBookingChartData' => $dailyBookingChartData,
             'hospitalBranches' => $hospitalBranches,
             'specializations' => $specializations,
+            'doctors' => $doctors,
             'selectedBranch' => $selectedBranch,
             'selectedSpecialization' => $selectedSpecialization,
             'isSuperadmin' => $isSuperadmin,
@@ -549,8 +570,410 @@ class BookingController extends Controller
 
         return view('booking.reports', $data);
     }
+    public function detailedReport(Request $request)
+    {
+        $user = Auth::guard('booking')->user();
+        $isSuperadmin = $user && $user->role === 'superadmin';
+        $isAdmin = $user && $user->role === 'admin';
+        $userBranch = $user ? $user->hospital_branch : null;
 
+        $validationRules = [
+            'ajax' => 'nullable|boolean',
+            'export_csv' => 'nullable|boolean',
+            'generate_report' => 'nullable|boolean',
+            'start_date' => 'nullable|date_format:Y-m-d',
+            'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
+            'time_period' => 'nullable|in:day,month,year,custom',
+            'specialization' => 'nullable|exists:bk_specializations,id',
+            'status' => 'nullable|in:all,pending,patients_seen,missed,cancelled,rescheduled,external_pending,external_approved,archived',
+            'doctor' => 'nullable|exists:bk_doctor,id',
+            'booking_type' => 'nullable|in:new,review,post_op',
+        ];
 
+        if ($isSuperadmin) {
+            $validationRules['branch'] = 'nullable|in:kijabe,westlands,naivasha,marira';
+        }
+
+        $request->validate($validationRules);
+
+        $selectedBranch = $isSuperadmin ? $request->input('branch', $userBranch) : $userBranch;
+        $timePeriod = $request->input('time_period', 'month');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $selectedSpecialization = $request->input('specialization');
+        $status = $request->input('status', 'all');
+        $selectedDoctor = $request->input('doctor');
+        $bookingType = $request->input('booking_type');
+        $showReport = $request->has('generate_report');
+
+        if ($timePeriod === 'day') {
+            $startDate = Carbon::today()->startOfDay()->toDateString();
+            $endDate = Carbon::today()->endOfDay()->toDateString();
+        } elseif ($timePeriod === 'month') {
+            $startDate = Carbon::now()->startOfMonth()->toDateString();
+            $endDate = Carbon::now()->endOfMonth()->toDateString();
+        } elseif ($timePeriod === 'year') {
+            $startDate = Carbon::now()->startOfYear()->toDateString();
+            $endDate = Carbon::now()->endOfYear()->toDateString();
+        } elseif ($timePeriod === 'custom' && $startDate && $endDate) {
+            $startDate = Carbon::parse($startDate)->startOfDay()->toDateString();
+            $endDate = Carbon::parse($endDate)->endOfDay()->toDateString();
+        } else {
+            $startDate = Carbon::now()->startOfMonth()->toDateString();
+            $endDate = Carbon::now()->endOfMonth()->toDateString();
+        }
+
+        $hospitalBranches = $this->getHospitalBranchEnumValues();
+        $specializations = $isSuperadmin
+            ? BkSpecializations::select('id', 'name', 'hospital_branch')
+            ->orderBy('name')
+            ->get()
+            ->map(function ($spec) {
+                $spec->display_name = $spec->name . ' (' . ucfirst($spec->hospital_branch) . ')';
+                return $spec;
+            })
+            : BkSpecializations::where('hospital_branch', $userBranch)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($spec) {
+                $spec->display_name = $spec->name;
+                return $spec;
+            });
+
+        $doctors = $isSuperadmin
+            ? BkDoctor::select('id', 'doctor_name', 'hospital_branch')
+            ->orderBy('doctor_name')
+            ->get()
+            ->map(function ($doctor) {
+                $doctor->display_name = $doctor->doctor_name . ' - ' . ucfirst($doctor->hospital_branch);
+                return $doctor;
+            })
+            : BkDoctor::where('hospital_branch', $userBranch)
+            ->orderBy('doctor_name')
+            ->get()
+            ->map(function ($doctor) {
+                $doctor->display_name = $doctor->doctor_name;
+                return $doctor;
+            });
+
+        // Reuse dashboard method for appointment fetching
+        $dashboardResponse = $this->dashboard($request, $status);
+
+        if ($dashboardResponse instanceof \Illuminate\Http\RedirectResponse) {
+            return $dashboardResponse;
+        } elseif ($dashboardResponse instanceof \Illuminate\Http\JsonResponse) {
+            return $dashboardResponse;
+        } elseif ($dashboardResponse instanceof \Illuminate\Http\Response) {
+            return $dashboardResponse;
+        } elseif ($dashboardResponse instanceof \Illuminate\View\View) {
+            $data = $dashboardResponse->getData();
+        } else {
+            $data = $dashboardResponse;
+        }
+
+        $appointments = isset($data['appointments']) ? collect($data['appointments']) : collect();
+
+        // Apply additional filters
+        if ($selectedSpecialization) {
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            if ($specName) {
+                $appointments = $appointments->filter(function ($appointment) use ($specName) {
+                    return isset($appointment->specialization) && $appointment->specialization === $specName;
+                })->values();
+            } else {
+                Log::warning('Specialization not found for ID: ' . $selectedSpecialization);
+                $appointments = collect();
+            }
+        }
+
+        if ($selectedDoctor) {
+            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            if ($doctorName) {
+                $appointments = $appointments->filter(function ($appointment) use ($doctorName) {
+                    return isset($appointment->doctor) && $appointment->doctor === $doctorName;
+                })->values();
+            } else {
+                Log::warning('Doctor not found for ID: ' . $selectedDoctor);
+                $appointments = collect();
+            }
+        }
+
+        if ($bookingType) {
+            $appointments = $appointments->filter(function ($appointment) use ($bookingType) {
+                return isset($appointment->booking_type) && $appointment->booking_type === $bookingType;
+            })->values();
+        }
+
+        // Calculate totals
+        $baseQuery = BkAppointments::query()
+            ->whereBetween('appointment_date', [$startDate, $endDate])
+            ->where('appointment_status', '!=', 'rescheduled');
+        if ($selectedBranch) {
+            $baseQuery->where('hospital_branch', $selectedBranch);
+        }
+        if ($selectedSpecialization) {
+            $baseQuery->where('specialization', $selectedSpecialization);
+        }
+        if ($selectedDoctor) {
+            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            $baseQuery->where('doctor_name', $doctorName);
+        }
+        if ($bookingType) {
+            $baseQuery->where('booking_type', $bookingType);
+        }
+
+        $externalApprovedQuery = ExternalApproved::query()
+            ->whereBetween('appointment_date', [$startDate, $endDate]);
+        if ($selectedBranch) {
+            $externalApprovedQuery->where('hospital_branch', $selectedBranch);
+        }
+        if ($selectedSpecialization) {
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            $externalApprovedQuery->where('specialization', $specName);
+        }
+        if ($selectedDoctor) {
+            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            $externalApprovedQuery->where('doctor_name', $doctorName);
+        }
+        if (!$isSuperadmin && $userBranch !== 'kijabe') {
+            $externalApprovedQuery->whereRaw('1 = 0');
+        }
+
+        $pendingExternalQuery = ExternalPendingApproval::query()
+            ->whereBetween('appointment_date', [$startDate, $endDate]);
+        if ($selectedSpecialization) {
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            $pendingExternalQuery->where('specialization', $specName);
+        }
+        // if ($selectedDoctor) {
+        //     $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+        //     $pendingExternalQuery->where('doctor_name', $doctorName);
+        // }
+        if (!$isSuperadmin && $userBranch !== 'kijabe') {
+            $pendingExternalQuery->whereRaw('1 = 0');
+        }
+
+        $cancelledQuery = CancelledAppointment::query()
+            ->whereBetween('appointment_date', [$startDate, $endDate]);
+        if ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+            $cancelledQuery->where('hospital_branch', $selectedBranch);
+        }
+        if ($selectedSpecialization) {
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            $cancelledQuery->where('specialization', $specName);
+        }
+        if ($selectedDoctor) {
+            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            $cancelledQuery->where('doctor_name', $doctorName);
+        }
+        if ($bookingType) {
+            $cancelledQuery->where('booking_type', $bookingType);
+        }
+
+        $rescheduledQuery = DB::table('bk_rescheduled_appointments as r')
+            ->join('bk_appointments as a', 'r.appointment_id', '=', 'a.id')
+            ->whereBetween('r.created_at', [$startDate, $endDate]);
+        if ($selectedBranch) {
+            $rescheduledQuery->where('a.hospital_branch', $selectedBranch);
+        }
+        if ($selectedSpecialization) {
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            $rescheduledQuery->where('a.specialization', $specName);
+        }
+        if ($selectedDoctor) {
+            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            $rescheduledQuery->where('a.doctor_name', $doctorName);
+        }
+        if ($bookingType) {
+            $rescheduledQuery->where('a.booking_type', $bookingType);
+        }
+
+        try {
+            $totals = [
+                'total_appointments' => $baseQuery->clone()->count() +
+                    $externalApprovedQuery->clone()->count() +
+                    $pendingExternalQuery->clone()->count() +
+                    $cancelledQuery->clone()->count(),
+                'confirmed_pending' => $baseQuery->clone()->where('appointment_status', 'pending')->count() +
+                    $externalApprovedQuery->clone()->where('appointment_status', 'pending')->count(),
+                'patients_seen' => $baseQuery->clone()->whereIn('appointment_status', ['honoured', 'early', 'late'])->count() +
+                    $externalApprovedQuery->clone()->whereIn('appointment_status', ['honoured', 'early', 'late'])->count(),
+                'missed' => $baseQuery->clone()->where('appointment_status', 'missed')->count() +
+                    $externalApprovedQuery->clone()->where('appointment_status', 'missed')->count(),
+                'cancelled' => $cancelledQuery->clone()->count(),
+                'rescheduled' => $rescheduledQuery->clone()->count(),
+                'pending_external_approvals' => $pendingExternalQuery->clone()->count(),
+                'external_approved' => $externalApprovedQuery->clone()->count(),
+                'archived' => $baseQuery->clone()->where('appointment_status', 'archived')->count() +
+                    $externalApprovedQuery->clone()->where('appointment_status', 'archived')->count(),
+                'new_count' => $baseQuery->clone()->where('booking_type', 'new')->count(),
+                'review_count' => $baseQuery->clone()->where('booking_type', 'review')->count(),
+                'postop_count' => $baseQuery->clone()->where('booking_type', 'post_op')->count(),
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to calculate totals: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return redirect()->route('booking.detailed-report')->with('error', 'Failed to calculate totals: ' . $e->getMessage());
+        }
+
+        $branchData = collect();
+        if ($isSuperadmin) {
+            $branchQuery = BkAppointments::query()
+                ->select([
+                    'hospital_branch',
+                    DB::raw('COUNT(*) as total_bookings'),
+                ])
+                ->whereBetween('appointment_date', [$startDate, $endDate])
+                ->where('appointment_status', '!=', 'rescheduled')
+                ->groupBy('hospital_branch')
+                ->union(
+                    ExternalApproved::query()
+                        ->select([
+                            'hospital_branch',
+                            DB::raw('COUNT(*) as total_bookings'),
+                        ])
+                        ->whereBetween('appointment_date', [$startDate, $endDate])
+                        ->groupBy('hospital_branch')
+                );
+
+            if ($selectedSpecialization) {
+                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+                $branchQuery = BkAppointments::query()
+                    ->select([
+                        'hospital_branch',
+                        DB::raw('COUNT(*) as total_bookings'),
+                    ])
+                    ->where('specialization', $specName)
+                    ->where('appointment_status', '!=', 'rescheduled')
+                    ->whereBetween('appointment_date', [$startDate, $endDate])
+                    ->groupBy('hospital_branch')
+                    ->union(
+                        ExternalApproved::query()
+                            ->select([
+                                'hospital_branch',
+                                DB::raw('COUNT(*) as total_bookings'),
+                            ])
+                            ->where('specialization', $specName)
+                            ->whereBetween('appointment_date', [$startDate, $endDate])
+                            ->groupBy('hospital_branch')
+                    );
+            }
+
+            try {
+                $branchData = $branchQuery->get()->groupBy('hospital_branch')->map(function ($group) {
+                    return (object) [
+                        'hospital_branch' => $group->first()->hospital_branch,
+                        'total_bookings' => $group->sum('total_bookings'),
+                    ];
+                })->values();
+            } catch (\Exception $e) {
+                Log::error('Failed to fetch branch report data: ' . $e->getMessage(), [
+                    'sql' => $branchQuery->toSql(),
+                    'bindings' => $branchQuery->getBindings(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
+        }
+
+        if ($request->has('export_csv')) {
+            $filename = ($selectedBranch ? "{$selectedBranch}_" : "") . ($status !== 'all' ? "{$status}_" : "") . "detailed_report_" . now()->format('Ymd_His') . ".csv";
+            $headers = [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            ];
+
+            if ($appointments->isEmpty()) {
+                return response()->stream(function () {
+                    $file = fopen('php://output', 'w');
+                    fputcsv($file, ['No records found']);
+                    fclose($file);
+                }, 200, $headers);
+            }
+
+            $columns = [
+                'appointment_number',
+                'full_name',
+                'patient_number',
+                'email',
+                'phone',
+                'specialization',
+                'doctor',
+                'booking_type',
+                'appointment_status',
+                'appointment_date',
+                'appointment_time',
+                'hospital_branch',
+                'notes',
+                'doctor_comments',
+            ];
+
+            if ($status === 'rescheduled') {
+                $columns = [
+                    'appointment_number',
+                    'full_name',
+                    'patient_number',
+                    'email',
+                    'phone',
+                    'previous_specialization',
+                    'current_specialization',
+                    'doctor',
+                    'booking_type',
+                    'appointment_status',
+                    'previous_date',
+                    'previous_time',
+                    'current_date',
+                    'current_time',
+                    'reason',
+                    'previous_branch',
+                    'current_branch',
+                    'notes',
+                    'doctor_comments',
+                ];
+            } elseif ($status === 'cancelled') {
+                $columns[] = 'cancellation_reason';
+            }
+
+            return response()->stream(function () use ($appointments, $columns, $status) {
+                $file = fopen('php://output', 'w');
+                fputcsv($file, $columns);
+                foreach ($appointments as $appointment) {
+                    $row = [];
+                    foreach ($columns as $col) {
+                        if ($status === 'rescheduled' && in_array($col, ['previous_date', 'current_date'])) {
+                            $row[$col] = $appointment->$col ? Carbon::parse($appointment->$col)->format('Y-m-d') : '-';
+                        } else {
+                            $row[$col] = $appointment->$col ?? '-';
+                        }
+                    }
+                    fputcsv($file, $row);
+                }
+                fclose($file);
+            }, 200, $headers);
+        }
+
+        $data = array_merge($data, [
+            'hospitalBranches' => $hospitalBranches,
+            'specializations' => $specializations,
+            'doctors' => $doctors,
+            'selectedBranch' => $selectedBranch,
+            'selectedSpecialization' => $selectedSpecialization,
+            'selectedDoctor' => $selectedDoctor,
+            'bookingType' => $bookingType,
+            'isSuperadmin' => $isSuperadmin,
+            'isAdmin' => $isAdmin,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'timePeriod' => $timePeriod,
+            'status' => $status,
+            'appointments' => $appointments,
+            'totals' => $totals,
+            'branchData' => $branchData,
+            'showReport' => $showReport,
+        ]);
+
+        return view('booking.report-details', $data);
+    }
     public function dashboard(Request $request, $status = null)
     {
         $status = $status ? strtolower($status) : null;
@@ -625,6 +1048,7 @@ class BookingController extends Controller
                             DB::raw('NULL as notes'),
                             'bk_appointments.doctor_comments',
                             'bk_appointments.hospital_branch',
+                            'bk_appointments.hmis_visit_status',
                             'bk_appointments.visit_date',
                             'bk_appointments.created_at',
                             DB::raw("'$status' as source_table"),
