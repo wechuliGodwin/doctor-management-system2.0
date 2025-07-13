@@ -44,8 +44,8 @@
                             style="width: 100%; padding: 6px; font-size: 0.85rem; border: 1px solid #ccc; border-radius: 4px;">
                             <option value="" disabled selected>Select</option>
                             <option value="contacted">Contacted</option>
-                            <option value="not contacted">
-                                Not Condacted</option>
+                            <option value="no response">
+                                No Response</option>
                             <!-- <option value="other">Other</option> -->
                         </select>
                     </div>

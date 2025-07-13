@@ -161,6 +161,7 @@
         padding: 10px;
         text-align: left;
         border-bottom: 1px solid #e2e8f0;
+        min-width: 100px;
     }
 
     .data-table th {
@@ -170,6 +171,10 @@
         position: sticky;
         top: 0;
         z-index: 1;
+    }
+
+    .data-table td {
+        vertical-align: middle;
     }
 
     .data-table tfoot {
@@ -219,6 +224,11 @@
         .filters-grid {
             grid-template-columns: 1fr;
         }
+
+        .data-table th,
+        .data-table td {
+            min-width: 80px;
+        }
     }
 
     #customDateRange {
@@ -227,12 +237,6 @@
 </style>
 
 <div class="dashboard-container">
-    <!-- Header -->
-    <!-- <div class="header">
-        <h1>Specialization Performance Reports</h1>
-        <p>Analyze appointment trends by specialization and branch</p>
-    </div> -->
-
     <!-- Filters Section -->
     <div class="filters-section">
         <form id="filtersForm" action="{{ route('booking.reports') }}" method="GET">
@@ -360,30 +364,26 @@
     </div>
     @endif
 
-    <!-- Hospital Branch Insights Section (Superadmins Only) -->
-    @if ($isSuperadmin)
-    <div class="section-header">
-        <h2>Hospital Branch Bookings</h2>
-        <p class="section-description">Total bookings per hospital branch (including internal and external approved appointments)</p>
-    </div>
+    <!-- Hospital Branch Insights Section (Superadmins and Admins Only) -->
+    @if ($isSuperadmin || $isAdmin)
     @if ($branchData->isEmpty())
     <div class="no-data-message">No branch booking data available for the selected filters.</div>
     @else
-    <div class="reports-section">
-        <div class="report-card">
-            <h3 class="report-title">Branch Booking Distribution</h3>
-            <div class="chart-container">
-                <canvas id="branchChart"></canvas>
-            </div>
-        </div>
+    <div class="reports-section full-width">
         <div class="table-container">
-            <h3 class="report-title">Branch Booking Details</h3>
+            <h3 class="report-title">Tracing Status Details</h3>
             <div style="overflow-x: auto;">
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>Branch</th>
                             <th>Total Bookings</th>
+                            <th>Contacted</th>
+                            <th>Contacted %</th>
+                            <th>No Response</th>
+                            <th>No Response %</th>
+                            <th>Other</th>
+                            <th>Other %</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -391,6 +391,12 @@
                         <tr>
                             <td>{{ ucfirst($data->hospital_branch) }}</td>
                             <td>{{ $data->total_bookings }}</td>
+                            <td>{{ $data->traced_contacted }}</td>
+                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_contacted / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td>{{ $data->traced_no_response }}</td>
+                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_no_response / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td>{{ $data->traced_other }}</td>
+                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_other / $data->total_bookings) * 100, 1) : 0 }}%</td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -398,6 +404,12 @@
                         <tr>
                             <td><strong>Total</strong></td>
                             <td><strong>{{ $branchData->sum('total_bookings') }}</strong></td>
+                            <td><strong>{{ $branchData->sum('traced_contacted') }}</strong></td>
+                            <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('traced_contacted') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
+                            <td><strong>{{ $branchData->sum('traced_no_response') }}</strong></td>
+                            <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('traced_no_response') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
+                            <td><strong>{{ $branchData->sum('traced_other') }}</strong></td>
+                            <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('traced_other') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -406,12 +418,18 @@
     </div>
     @endif
     @endif
-
 </div>
 
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
+    // Debug: Check if Chart.js is loaded
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js library is not loaded. Ensure the CDN is accessible.');
+    } else {
+        console.log('Chart.js library loaded successfully, version:', Chart.version);
+    }
+
     // Toggle custom date range inputs
     function toggleCustomDateRange() {
         const timePeriod = document.getElementById('timePeriod').value;
@@ -424,112 +442,65 @@
     // Initial toggle based on selected time period
     toggleCustomDateRange();
 
-    // Branch Chart (Superadmins Only) - Pie Chart
-    @if($isSuperadmin && !$branchData -> isEmpty())
-    const branchChartData = @json($branchChartData);
-    console.log('Branch Chart Data:', branchChartData); // Debug: Log branch chart data
-
-    const branchCtx = document.getElementById('branchChart');
-    if (branchCtx) {
-        const branchChart = new Chart(branchCtx.getContext('2d'), {
-            type: 'pie',
-            data: {
-                labels: branchChartData.labels,
-                datasets: [{
-                    label: branchChartData.datasets[0].label,
-                    data: branchChartData.datasets[0].data,
-                    backgroundColor: branchChartData.datasets[0].backgroundColor,
-                    borderColor: '#ffffff',
-                    borderWidth: 1,
-                }],
-            },
-            options: {
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'right',
-                        labels: {
-                            boxWidth: 20,
-                            padding: 15,
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.label || '';
-                                let value = context.raw || 0;
-                                let total = context.dataset.data.reduce((sum, val) => sum + val, 0);
-                                let percentage = ((value / total) * 100).toFixed(1);
-                                return `${label}: ${value} (${percentage}%)`;
-                            }
-                        }
-                    }
-                },
-                responsive: true,
-                maintainAspectRatio: false,
-            }
-        });
-    } else {
-        console.error('Canvas element #branchChart not found');
-    }
-    @elseif($isSuperadmin)
-    console.warn('No branch data available for chart rendering');
-    @endif
-
     // Specialization Performance Chart (Top 10)
     @if(!$specializationData -> isEmpty())
     const chartData = @json($chartData);
-    console.log('Specialization Chart Data:', chartData); // Debug: Log specialization chart data
+    console.log('Specialization Chart Data:', chartData);
 
     const performanceCtx = document.getElementById('performanceChart');
     if (performanceCtx) {
-        const performanceChart = new Chart(performanceCtx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: chartData.labels,
-                datasets: chartData.datasets.map(dataset => ({
-                    ...dataset,
-                    maxBarThickness: 60, // Set maximum bar width to 60px
-                    barPercentage: 0.9, // Use 90% of the available bar space
-                    categoryPercentage: 0.8 // Use 80% of the category space
-                })),
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Number of Appointments'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: '{{ $selectedSpecialization ? "Metrics for Selected Specialization" : "Top 10 Specializations" }}'
+        try {
+            const performanceChart = new Chart(performanceCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartData.labels,
+                    datasets: chartData.datasets.map(dataset => ({
+                        ...dataset,
+                        maxBarThickness: 60,
+                        barPercentage: 0.9,
+                        categoryPercentage: 0.8
+                    })),
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Appointments'
+                            }
                         },
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45,
-                            autoSkip: false,
-                            maxTicksLimit: 10
+                        x: {
+                            title: {
+                                display: true,
+                                text: '{{ $selectedSpecialization ? "Metrics for Selected Specialization" : "Top 10 Specializations" }}'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: false,
+                                maxTicksLimit: 10
+                            }
                         }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
                     },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                    }
-                },
-                responsive: true,
-                maintainAspectRatio: false,
-            }
-        });
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+            console.log('Specialization Performance Chart initialized successfully');
+        } catch (error) {
+            console.error('Error initializing Specialization Performance Chart:', error);
+        }
     } else {
         console.error('Canvas element #performanceChart not found');
     }
@@ -540,57 +511,117 @@
     // Daily Booking Rate Chart
     @if(!empty($dailyBookingChartData['labels']))
     const dailyBookingChartData = @json($dailyBookingChartData);
-    console.log('Daily Booking Chart Data:', dailyBookingChartData); // Debug: Log daily booking chart data
+    console.log('Daily Booking Chart Data:', dailyBookingChartData);
 
     const dailyBookingCtx = document.getElementById('dailyBookingChart');
     if (dailyBookingCtx) {
-        const dailyBookingChart = new Chart(dailyBookingCtx.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: dailyBookingChartData.labels,
-                datasets: dailyBookingChartData.datasets,
-            },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Number of Bookings'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Date'
+        try {
+            const dailyBookingChart = new Chart(dailyBookingCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: dailyBookingChartData.labels,
+                    datasets: dailyBookingChartData.datasets,
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Bookings'
+                            }
                         },
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: 10
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            }
                         }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
                     },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                    }
-                },
-                responsive: true,
-                maintainAspectRatio: false,
-            }
-        });
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+            console.log('Daily Booking Rate Chart initialized successfully');
+        } catch (error) {
+            console.error('Error initializing Daily Booking Rate Chart:', error);
+        }
     } else {
         console.error('Canvas element #dailyBookingChart not found');
     }
     @else
     console.warn('No daily booking data available for chart rendering');
+    @endif
+
+    // Branch Chart (Superadmins Only)
+    @if($isSuperadmin && !$branchData -> isEmpty())
+    const branchChartData = @json($branchChartData);
+    console.log('Branch Chart Data:', branchChartData);
+
+    const branchCtx = document.getElementById('branchChart');
+    if (branchCtx) {
+        try {
+            const branchChart = new Chart(branchCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: branchChartData.labels,
+                    datasets: branchChartData.datasets,
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Bookings'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Hospital Branch'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false,
+                }
+            });
+            console.log('Branch Chart initialized successfully');
+        } catch (error) {
+            console.error('Error initializing Branch Chart:', error);
+        }
+    } else {
+        console.error('Canvas element #branchChart not found');
+    }
+    @elseif($isSuperadmin)
+    console.warn('No branch data available for chart rendering');
     @endif
 </script>
 @endsection

@@ -1065,7 +1065,7 @@
             createdRow: function(row, data, dataIndex) {
                 if (data.tracing_status === 'contacted') {
                     $(row).addClass('tracing-contacted');
-                } else if (data.tracing_status === 'not contacted') {
+                } else if (data.tracing_status === 'no response') {
                     $(row).addClass('tracing-not-contacted');
                 } else {
                     $(row).addClass('tracing-none');

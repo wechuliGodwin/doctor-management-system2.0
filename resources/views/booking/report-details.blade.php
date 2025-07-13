@@ -5,8 +5,15 @@
 @section('content')
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
-<div class="min-h-screen bg-gray-50 p-6">
+<div class="min-h-screen bg-gray-50 p-4">
     <div class="max-w-7xl mx-auto">
+        <!-- Error Message -->
+        @if (session('error'))
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 max-w-7xl mx-auto">
+            <strong>Error:</strong> {{ session('error') }}
+        </div>
+        @endif
+
         <!-- Filter Page -->
         @if (!isset($showReport) || !$showReport)
         <div class="text-center mb-8">
@@ -148,6 +155,22 @@
                             <option value="post_op" {{ $bookingType === 'post_op' ? 'selected' : '' }}>Post-Op</option>
                         </select>
                     </div>
+
+                    <!-- Tracing Status -->
+                    <div>
+                        <label for="tracingStatus" class="block text-sm font-medium text-gray-700 mb-2">
+                            <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                            </svg>
+                            Tracing Status
+                        </label>
+                        <select id="tracingStatus" name="tracing_status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">All Tracing Statuses</option>
+                            <option value="contacted" {{ $tracingStatus === 'contacted' ? 'selected' : '' }}>Contacted</option>
+                            <option value="no response" {{ $tracingStatus === 'no response' ? 'selected' : '' }}>No Response</option>
+                            <!-- <option value="other" {{ $tracingStatus === 'other' ? 'selected' : '' }}>Other</option> -->
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Action Buttons -->
@@ -172,40 +195,43 @@
                 <li>• Select your desired filters from the options above</li>
                 <li>• Leave filters empty to include all records for that category</li>
                 <li>• Click "Generate Report" to view the filtered results</li>
-                <li>• Export the report as CSV or print once generated</li>
+                <li>• Export the report as PDF or print once generated</li>
             </ul>
         </div>
         @else
         <!-- Report Page -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            <div class="flex flex-col items-center">
+                <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2 justify-center">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    Appointment Report
+                </h1>
+                <p class="text-gray-600 mt-1 text-center">
+                    Generated on {{ \Carbon\Carbon::now()->format('j F, Y') }} at {{ \Carbon\Carbon::now()->format('h:i A') }}
+                </p>
+                <div class="flex gap-3 mt-4">
+                    <a href="{{ route('booking.detailed-report') }}" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                         </svg>
-                        Appointment Report
-                    </h1>
-                    <p class="text-gray-600 mt-1">
-                        Generated on {{ \Carbon\Carbon::now()->format('F j, Y') }} at {{ \Carbon\Carbon::now()->format('h:i A') }}
-                    </p>
-                </div>
-                <div class="flex gap-3">
-                    <a href="{{ route('booking.detailed-report') }}" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                         Back to Filters
                     </a>
-                    <button type="button" onclick="window.print()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                        </svg>
-                        Print
-                    </button>
-                    <button type="button" onclick="exportPdf()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                        </svg>
-                        Export PDF
-                    </button>
+                    <div class="relative">
+                        <button type="button" id="exportPdfButton" onclick="exportPdf()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            Export PDF
+                            <div id="loader" class="hidden absolute inset-0 flex items-center justify-center bg-green-600 bg-opacity-75 rounded-lg">
+                                <svg class="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                        </button>
+                    </div>
                     <form id="exportForm" action="{{ route('booking.detailed-report') }}" method="GET" style="display: none;">
                         @foreach (request()->all() as $key => $value)
                         @if ($key !== 'export_pdf')
@@ -258,61 +284,15 @@
                     <p class="font-medium text-indigo-900">{{ ucfirst(str_replace('_', '-', $bookingType)) }}</p>
                 </div>
                 @endif
-            </div>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600">Total Appointments</p>
-                        <p class="text-2xl font-bold text-gray-900">{{ $totals['total_appointments'] }}</p>
-                    </div>
-                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
+                @if ($tracingStatus)
+                <div class="bg-teal-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Tracing Status</p>
+                    <p class="font-medium text-teal-900">{{ ucfirst(str_replace('_', ' ', $tracingStatus)) }}</p>
                 </div>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600">External Appointments</p>
-                        <p class="text-2xl font-bold text-blue-600">{{ $totals['pending_external_approvals'] + $totals['external_approved'] }}</p>
-                    </div>
-                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600">Internal Appointments</p>
-                        <p class="text-2xl font-bold text-green-600">{{ $totals['new_count'] + $totals['review_count'] + $totals['postop_count'] }}</p>
-                    </div>
-                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600">Missed Appointments</p>
-                        <p class="text-2xl font-bold text-red-600">{{ $totals['missed'] }}</p>
-                    </div>
-                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
+                @endif
+                <div class="bg-gray-50 p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Filtered Records</p>
+                    <p class="font-medium text-gray-900">{{ $appointments->count() }}</p>
                 </div>
             </div>
         </div>
@@ -352,6 +332,9 @@
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Doctor</th>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Specialization</th>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Tracing Status</th>
+                            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Tracing Message</th>
+                            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Tracing Date</th>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
@@ -405,6 +388,22 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                                    @if ($appointment->tracing_status === 'contacted')
+                                        bg-teal-100 text-teal-800
+                                    @elseif ($appointment->tracing_status === 'no response')
+                                        bg-orange-100 text-orange-800
+                                    @elseif ($appointment->tracing_status === 'other')
+                                        bg-blue-100 text-blue-800
+                                    @else
+                                        bg-gray-100 text-gray-800
+                                    @endif">
+                                    {{ $appointment->tracing_status ? ucfirst(str_replace('_', ' ', $appointment->tracing_status)) : '-' }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->tracing_message ?? '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->tracing_date ?? '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {{ $status === 'rescheduled' ? ($appointment->current_branch ?? '-') : ($appointment->hospital_branch ?? '-') }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -431,7 +430,7 @@
         @endif
         @endif
 
-        <!-- JavaScript for toggling date range -->
+        <!-- JavaScript for toggling date range and handling export -->
         <script>
             function toggleCustomDateRange() {
                 const timePeriod = document.getElementById('timePeriod').value;
@@ -440,8 +439,18 @@
             }
 
             function exportPdf() {
+                const button = document.getElementById('exportPdfButton');
+                const loader = document.getElementById('loader');
                 const form = document.getElementById('exportForm');
+
+                // Show loader and disable button
+                loader.classList.remove('hidden');
+                button.disabled = true;
+
+                // Submit the form to initiate PDF download
                 form.submit();
+                // Note: Loader persists until the server responds with the PDF download.
+                // Since form submission may redirect or trigger a download, we do not attempt to hide the loader client-side.
             }
 
             function resetFilters() {
@@ -455,7 +464,6 @@
         <!-- Print-specific styles -->
         <style>
             @media print {
-
                 .filters-section,
                 .action-buttons,
                 .info-section,
