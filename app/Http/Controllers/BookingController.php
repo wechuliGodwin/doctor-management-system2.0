@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Route;
@@ -572,6 +573,10 @@ class BookingController extends Controller
     }
     public function detailedReport(Request $request)
     {
+        // Set memory limit dynamically
+        ini_set('memory_limit', '512M');
+        ini_set('max_execution_time', 300); // Increase execution time to 5 minutes
+
         $user = Auth::guard('booking')->user();
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
@@ -580,7 +585,7 @@ class BookingController extends Controller
         // Validation rules
         $validationRules = [
             'ajax' => 'nullable|boolean',
-            'export_csv' => 'nullable|boolean',
+            'export_pdf' => 'nullable|boolean',
             'generate_report' => 'nullable|boolean',
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
@@ -685,6 +690,8 @@ class BookingController extends Controller
         if ($dashboardResponse instanceof \Illuminate\Http\RedirectResponse) {
             return $dashboardResponse;
         } elseif ($dashboardResponse instanceof \Illuminate\Http\JsonResponse) {
+            return $dashboardResponse;
+        } elseif ($dashboardResponse instanceof \Symfony\Component\HttpFoundation\StreamedResponse) {
             return $dashboardResponse;
         } elseif ($dashboardResponse instanceof \Illuminate\Http\Response) {
             return $dashboardResponse;
@@ -884,81 +891,132 @@ class BookingController extends Controller
             return redirect()->route('booking.detailed-report')->with('error', 'Failed to calculate totals: ' . $e->getMessage());
         }
 
-        // Handle CSV export
-        if ($request->has('export_csv')) {
-            $filename = ($selectedBranch ? "{$selectedBranch}_" : "") . ($status !== 'all' ? "{$status}_" : "") . "detailed_report_" . now()->format('Ymd_His') . ".csv";
-            $headers = [
-                'Content-Type' => 'text/csv',
-                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-            ];
+        // Log appointments data for debugging
+        Log::debug('Appointments data', [
+            'count' => count($appointments),
+            'sample' => $appointments->first() ? (array) $appointments->first() : null,
+            'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
+        ]);
 
-            if ($appointments->isEmpty()) {
-                return response()->stream(function () {
-                    $file = fopen('php://output', 'w');
-                    fputcsv($file, ['No records found']);
-                    fclose($file);
-                }, 200, $headers);
-            }
+        // Handle PDF export
+        if ($request->has('export_pdf')) {
+            $filename = ($selectedBranch ? "{$selectedBranch}_" : "") . ($status !== 'all' ? "{$status}_" : "") . "detailed_report_" . now()->format('Ymd_His') . ".pdf";
 
+            // Define table columns based on status
             $columns = [
-                'appointment_number',
-                'full_name',
-                'patient_number',
-                'email',
-                'phone',
-                'specialization',
-                'doctor',
-                'booking_type',
-                'appointment_status',
-                'appointment_date',
-                'appointment_time',
-                'hospital_branch',
-                'notes',
-                'doctor_comments',
+                'appointment_number' => 'ID',
+                'full_name' => 'Patient',
+                'patient_number' => 'Patient Number',
+                'email' => 'Email',
+                'phone' => 'Phone',
+                'specialization' => 'Specialization',
+                'doctor' => 'Doctor',
+                'booking_type' => 'Type',
+                'appointment_status' => 'Status',
+                'appointment_date' => 'Date',
+                'appointment_time' => 'Time',
+                'hospital_branch' => 'Branch',
+                'notes' => 'Notes',
+                'doctor_comments' => 'Doctor Comments',
             ];
 
             if ($status === 'rescheduled') {
                 $columns = [
-                    'appointment_number',
-                    'full_name',
-                    'patient_number',
-                    'email',
-                    'phone',
-                    'previous_specialization',
-                    'current_specialization',
-                    'doctor',
-                    'booking_type',
-                    'appointment_status',
-                    'previous_date',
-                    'previous_time',
-                    'current_date',
-                    'current_time',
-                    'reason',
-                    'previous_branch',
-                    'current_branch',
-                    'notes',
-                    'doctor_comments',
+                    'appointment_number' => 'ID',
+                    'full_name' => 'Patient',
+                    'patient_number' => 'Patient Number',
+                    'email' => 'Email',
+                    'phone' => 'Phone',
+                    'previous_specialization' => 'Previous Specialization',
+                    'current_specialization' => 'Current Specialization',
+                    'doctor' => 'Doctor',
+                    'booking_type' => 'Type',
+                    'appointment_status' => 'Status',
+                    'previous_date' => 'Previous Date',
+                    'previous_time' => 'Previous Time',
+                    'current_date' => 'Current Date',
+                    'current_time' => 'Current Time',
+                    'reason' => 'Reason',
+                    'previous_branch' => 'Previous Branch',
+                    'current_branch' => 'Current Branch',
+                    'notes' => 'Notes',
+                    'doctor_comments' => 'Doctor Comments',
                 ];
             } elseif ($status === 'cancelled') {
-                $columns[] = 'cancellation_reason';
+                $columns['cancellation_reason'] = 'Cancellation Reason';
             }
 
-            return response()->stream(function () use ($appointments, $columns, $status) {
-                $file = fopen('php://output', 'w');
-                fputcsv($file, $columns);
-                foreach ($appointments as $appointment) {
-                    $row = [];
-                    foreach ($columns as $col) {
-                        if ($status === 'rescheduled' && in_array($col, ['previous_date', 'current_date'])) {
-                            $row[$col] = $appointment->$col ? Carbon::parse($appointment->$col)->format('Y-m-d') : '-';
-                        } else {
-                            $row[$col] = $appointment->$col ?? '-';
-                        }
-                    }
-                    fputcsv($file, $row);
+            // Prepare filter summary
+            $filters = [];
+            if ($startDate || $endDate) {
+                $filters['Date Range'] = $startDate . ' to ' . ($endDate ?: 'Present');
+            }
+            if ($selectedSpecialization) {
+                $filters['Specialization'] = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            }
+            if ($status && $status !== 'all') {
+                $filters['Status'] = ucfirst(str_replace('_', ' ', $status));
+            }
+            if ($selectedBranch) {
+                $filters['Hospital Branch'] = ucfirst($selectedBranch);
+            }
+            if ($selectedDoctor) {
+                $filters['Doctor'] = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+            }
+            if ($bookingType) {
+                $filters['Booking Type'] = ucfirst(str_replace('_', '-', $bookingType));
+            }
+
+            // Paginate appointments to reduce memory usage
+            $perPage = 100; // Adjust based on testing
+            $appointmentsChunked = $appointments->chunk($perPage);
+
+            try {
+                // Verify view exists
+                if (!view()->exists('booking.pdf-report')) {
+                    throw new \Exception('PDF view booking.pdf-report does not exist.');
                 }
-                fclose($file);
-            }, 200, $headers);
+
+                // Prepare data for PDF
+                $pdfData = [
+                    'appointments' => $appointments, // Pass full collection for now; chunking handled in view if needed
+                    'columns' => $columns,
+                    'totals' => $totals,
+                    'filters' => $filters,
+                    'generated_at' => Carbon::now()->format('F j, Y \a\t h:i A'),
+                    'title' => 'Appointment Report',
+                ];
+
+                // Log memory usage before PDF generation
+                Log::info('Preparing to generate PDF', [
+                    'filename' => $filename,
+                    'appointment_count' => count($appointments),
+                    'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
+                ]);
+
+                // Generate PDF
+                $pdf = Pdf::loadView('booking.pdf-report', $pdfData);
+                $pdf->setPaper('A4', 'portrait');
+                $pdf->setOptions([
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                    'dpi' => 150,
+                    'defaultFont' => 'Times-New-Roman',
+                    'isPhpEnabled' => true, // Enable PHP in Blade for dynamic rendering
+                ]);
+
+                // Stream instead of download for testing
+                return $pdf->stream($filename); // Change to download($filename) after confirming it works
+
+            } catch (\Exception $e) {
+                Log::error('Failed to generate PDF: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                    'filename' => $filename,
+                    'appointment_count' => count($appointments),
+                    'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
+                ]);
+                return redirect()->route('booking.detailed-report')->with('error', 'Failed to generate PDF: ' . $e->getMessage());
+            }
         }
 
         $data = [
