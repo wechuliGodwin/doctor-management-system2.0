@@ -369,37 +369,52 @@
                         <tr class="hover:bg-gray-50">
                             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $appointment->appointment_number ?? '-' }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                @if ($status === 'rescheduled')
+                                {{ $appointment->current_date ? \Carbon\Carbon::parse($appointment->current_date)->format('Y-m-d') : '-' }}
+                                @if ($appointment->current_time && $appointment->current_time !== '-')
+                                <br><span class="text-gray-500">{{ $appointment->current_time }}</span>
+                                @endif
+                                @else
                                 {{ $appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '-' }}
-                                @if ($appointment->appointment_time)
+                                @if ($appointment->appointment_time && $appointment->appointment_time !== '-')
                                 <br><span class="text-gray-500">{{ $appointment->appointment_time }}</span>
+                                @endif
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->full_name ?? '-' }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->doctor ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->specialization ?? '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ $status === 'rescheduled' ? ($appointment->current_specialization ?? '-') : ($appointment->specialization ?? '-') }}
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                                @if ($appointment->appointment_status === 'honoured' || $appointment->appointment_status === 'early' || $appointment->appointment_status === 'late')
-                                                    bg-green-100 text-green-800
-                                                @elseif ($appointment->appointment_status === 'missed')
-                                                    bg-red-100 text-red-800
-                                                @elseif ($appointment->appointment_status === 'cancelled')
-                                                    bg-gray-100 text-gray-800
-                                                @elseif ($appointment->appointment_status === 'rescheduled')
-                                                    bg-purple-100 text-purple-800
-                                                @else
-                                                    bg-yellow-100 text-yellow-800
-                                                @endif">
-                                    {{ ucfirst($appointment->appointment_status ?? '-') }}
+                                    @if (isset($appointment->appointment_status) && in_array($appointment->appointment_status, ['honoured', 'early', 'late']))
+                                        bg-green-100 text-green-800
+                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'missed')
+                                        bg-red-100 text-red-800
+                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'cancelled')
+                                        bg-gray-100 text-gray-800
+                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'rescheduled')
+                                        bg-purple-100 text-purple-800
+                                    @else
+                                        bg-yellow-100 text-yellow-800
+                                    @endif">
+                                    {{ isset($appointment->appointment_status) ? ucfirst($appointment->appointment_status) : 'Pending' }}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->hospital_branch ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->booking_type ? ucfirst(str_replace('_', '-', $appointment->booking_type)) : '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ $status === 'rescheduled' ? ($appointment->current_branch ?? '-') : ($appointment->hospital_branch ?? '-') }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ $appointment->booking_type ? ucfirst(str_replace('_', '-', $appointment->booking_type)) : '-' }}
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->notes ?? '-' }}</td>
                             @if ($status === 'rescheduled')
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->previous_number ?? '-' }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->previous_specialization ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->previous_date ? \Carbon\Carbon::parse($appointment->previous_date)->format('Y-m-d') : '-' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {{ $appointment->previous_date ? \Carbon\Carbon::parse($appointment->previous_date)->format('Y-m-d') : '-' }}
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->reason ?? '-' }}</td>
                             @endif
                             @if ($status === 'cancelled')
