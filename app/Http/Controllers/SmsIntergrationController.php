@@ -83,7 +83,6 @@ class SmsIntergrationController extends Controller
 
         return response()->json(['data' => $appointments]);
     }
-
     public function sendBulkSMS(Request $request)
     {
         $request->validate([
@@ -96,14 +95,15 @@ class SmsIntergrationController extends Controller
         $successCount = 0;
         $failedCount = 0;
 
+        // Define success status codes
+        $successCodes = ['1', '1000'];
+
         foreach ($request->recipients as $recipient) {
             try {
-                // Replace placeholders in the message
-                $personalizedMessage = $request->message;
                 $personalizedMessage = str_replace(
                     ['{name}', '{specialization}', '{date}', '{time}'],
                     [$recipient['full_name'], $recipient['specialization'], $recipient['appointment_date'], $recipient['appointment_time']],
-                    $personalizedMessage
+                    $request->message
                 );
 
                 $response = $client->post('https://sms.digitalleo.co.ke/sms/v3/sendsms', [
@@ -123,13 +123,13 @@ class SmsIntergrationController extends Controller
 
                 $result = json_decode($response->getBody(), true)[0];
 
-                // Save to bk_notifications with correct column names
-                BkNotifications::create([
+                $notification = BkNotifications::create([
                     'appointment_id' => $recipient['id'],
+                    'message_id' => $result['messageId'] ?? null,
                     'notification_date' => now()->toDateString(),
                     'appointment_time' => now()->toTimeString(),
                     'hospital_branch' => Auth::guard('booking')->user()->hospital_branch ?? 'kijabe',
-                    'status' => $result['status_code'] == '1000' ? 'sent' : 'failed',
+                    'status' => in_array($result['status_code'], $successCodes) ? 'sent' : 'failed',
                     'message' => $personalizedMessage,
                     'status_code' => $result['status_code'],
                     'status_desc' => $result['status_desc']
@@ -141,12 +141,13 @@ class SmsIntergrationController extends Controller
                     'specialization' => $recipient['specialization'],
                     'appointment_date' => $recipient['appointment_date'],
                     'message' => $personalizedMessage,
+                    'message_id' => $result['messageId'] ?? null,
                     'status_code' => $result['status_code'],
                     'status_desc' => $result['status_desc'],
                     'sent_at' => now()->toDateTimeString()
                 ];
 
-                if ($result['status_code'] == '1000') {
+                if (in_array($result['status_code'], $successCodes)) {
                     $successCount++;
                 } else {
                     $failedCount++;
@@ -155,8 +156,9 @@ class SmsIntergrationController extends Controller
                 Log::error('SMS sending failed for recipient ' . $recipient['id'] . ': ' . $e->getMessage());
                 $failedCount++;
 
-                BkNotifications::create([
+                $notification = BkNotifications::create([
                     'appointment_id' => $recipient['id'],
+                    'message_id' => null,
                     'notification_date' => now()->toDateString(),
                     'appointment_time' => now()->toTimeString(),
                     'hospital_branch' => Auth::guard('booking')->user()->hospital_branch ?? 'kijabe',
@@ -172,6 +174,7 @@ class SmsIntergrationController extends Controller
                     'specialization' => $recipient['specialization'],
                     'appointment_date' => $recipient['appointment_date'],
                     'message' => $personalizedMessage,
+                    'message_id' => null,
                     'status_code' => '1003',
                     'status_desc' => $e->getMessage(),
                     'sent_at' => now()->toDateTimeString()
@@ -191,33 +194,76 @@ class SmsIntergrationController extends Controller
 
     public function getDeliveryLog(Request $request)
     {
-        $logs = BkNotifications::where('hospital_branch', Auth::guard('booking')->user()->hospital_branch)
-            ->join('bk_appointments', 'bk_notifications.appointment_id', '=', 'bk_appointments.id')
-            ->select(
-                'bk_notifications.*',
-                'bk_appointments.appointment_number',
-                'bk_appointments.specialization',
-                'bk_appointments.appointment_date'
-            )
-            ->with(['appointment.specialization'])
-            ->orderBy('bk_notifications.created_at', 'desc')
-            ->take(50)
-            ->get()
-            ->map(function ($log) {
+        try {
+            // Fetch notifications
+            $logs = BkNotifications::where('bk_notifications.hospital_branch', Auth::guard('booking')->user()->hospital_branch)
+                ->join('bk_appointments', 'bk_notifications.appointment_id', '=', 'bk_appointments.id')
+                ->select(
+                    'bk_notifications.*',
+                    'bk_appointments.appointment_number',
+                    'bk_appointments.specialization',
+                    'bk_appointments.appointment_date'
+                )
+                ->with(['appointment.specialization'])
+                ->orderBy('bk_notifications.created_at', 'desc')
+                ->take(50)
+                ->get();
+
+            // Fetch delivery reports for messages with status_code 1 or 1000 and no delivery_status
+            $client = new Client();
+            $successCodes = ['1', '1000'];
+            foreach ($logs as $log) {
+                if (in_array($log->status_code, $successCodes) && is_null($log->delivery_status) && $log->message_id) {
+                    try {
+                        $response = $client->get('https://api.tililtech.com/sms/v3/getdlr', [
+                            'verify' => false,
+                            'query' => [
+                                'api_key' => env('DIGITAL_LEO_API_KEY'),
+                                'messageId' => $log->message_id
+                            ]
+                        ]);
+
+                        $dlrData = explode(';', trim($response->getBody()->getContents()));
+
+                        if (count($dlrData) >= 5 && $dlrData[0] !== '1009') {
+                            $log->update([
+                                'delivery_status' => $dlrData[2],
+                                'delivery_desc' => $dlrData[3],
+                                'delivery_time' => $dlrData[4] ? Carbon::parse($dlrData[4]) : null,
+                                'tat' => $dlrData[5] ?? null
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Failed to fetch delivery report for message_id ' . $log->message_id . ': ' . $e->getMessage());
+                    }
+                }
+            }
+
+            // Map logs to response format
+            $mappedLogs = $logs->map(function ($log) {
                 return [
                     'appointment_id' => $log->appointment_id,
                     'appointment_number' => $log->appointment->appointment_number,
                     'specialization' => $log->appointment->specialization->name ?? '-',
                     'appointment_date' => Carbon::parse($log->appointment->appointment_date)->format('Y-m-d'),
                     'message' => $log->message,
+                    'message_id' => $log->message_id,
                     'status' => $log->status,
-                    'status code' => $log->{'status code'},
-                    'status description' => $log->{'status description'},
+                    'status_code' => $log->status_code,
+                    'status_desc' => $log->status_desc,
+                    'delivery_status' => $log->delivery_status ?? '-',
+                    'delivery_desc' => $log->delivery_desc ?? '-',
+                    'delivery_time' => $log->delivery_time ? Carbon::parse($log->delivery_time)->toDateTimeString() : '-',
+                    'tat' => $log->tat ?? '-',
                     'sent_at' => Carbon::parse($log->created_at)->toDateTimeString()
                 ];
             });
 
-        return response()->json(['logs' => $logs]);
+            return response()->json(['logs' => $mappedLogs]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching delivery log: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch delivery log'], 500);
+        }
     }
 
     public function getTemplates(Request $request)

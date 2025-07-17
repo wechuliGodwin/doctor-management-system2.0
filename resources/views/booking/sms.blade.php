@@ -461,8 +461,13 @@
                             <th>Specialization</th>
                             <th>Appointment Date</th>
                             <th>Message</th>
-                            <th>Status</th>
-                            <th>Status Description</th>
+                            <th>Message ID</th>
+                            <th>API Status</th>
+                            <th>API Status Desc</th>
+                            <th>Delivery Status</th>
+                            <th>Delivery Desc</th>
+                            <th>Delivery Time</th>
+                            <th>TAT</th>
                             <th>Sent At</th>
                         </tr>
                     </thead>
@@ -529,52 +534,52 @@
         }
 
         fetch(`{{ route('booking.searchPatients') }}?search=${encodeURIComponent(query)}`, {
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            const resultsContainer = document.getElementById('searchResults');
-            resultsContainer.innerHTML = '';
-            if (data.data && data.data.length) {
-                data.data.forEach(appointment => {
-                    if (!selectedPatients.find(p => p.id === appointment.id)) {
-                        const resultItem = document.createElement('div');
-                        resultItem.className = 'search-result-item';
-                        resultItem.innerHTML = `
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsContainer = document.getElementById('searchResults');
+                resultsContainer.innerHTML = '';
+                if (data.data && data.data.length) {
+                    data.data.forEach(appointment => {
+                        if (!selectedPatients.find(p => p.id === appointment.id)) {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'search-result-item';
+                            resultItem.innerHTML = `
                             ${appointment.full_name} (Patient: ${appointment.patient_number}, Appt: ${appointment.appointment_number}, ${appointment.specialization}) - ${appointment.appointment_date}
                         `;
-                        resultItem.onclick = () => {
-                            selectedPatients.push({
-                                id: appointment.id,
-                                full_name: appointment.full_name,
-                                phone: appointment.phone,
-                                specialization: appointment.specialization,
-                                appointment_date: appointment.appointment_date,
-                                appointment_time: appointment.appointment_time,
-                                appointment_number: appointment.appointment_number,
-                                patient_number: appointment.patient_number
-                            });
-                            renderSelectedPatients();
-                            resultsContainer.style.display = 'none';
-                            document.getElementById('patientSearch').value = '';
-                        };
-                        resultsContainer.appendChild(resultItem);
-                    }
-                });
-                resultsContainer.style.display = 'block';
-            } else {
-                resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
-                resultsContainer.style.display = 'block';
-            }
-        })
-        .catch(error => {
-            console.error('Error searching patients:', error);
-            document.getElementById('errorMessage').textContent = 'Error searching patients';
-            document.getElementById('errorMessage').style.display = 'block';
-        });
+                            resultItem.onclick = () => {
+                                selectedPatients.push({
+                                    id: appointment.id,
+                                    full_name: appointment.full_name,
+                                    phone: appointment.phone,
+                                    specialization: appointment.specialization,
+                                    appointment_date: appointment.appointment_date,
+                                    appointment_time: appointment.appointment_time,
+                                    appointment_number: appointment.appointment_number,
+                                    patient_number: appointment.patient_number
+                                });
+                                renderSelectedPatients();
+                                resultsContainer.style.display = 'none';
+                                document.getElementById('patientSearch').value = '';
+                            };
+                            resultsContainer.appendChild(resultItem);
+                        }
+                    });
+                    resultsContainer.style.display = 'block';
+                } else {
+                    resultsContainer.innerHTML = '<div class="search-result-item">No results found</div>';
+                    resultsContainer.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error searching patients:', error);
+                document.getElementById('errorMessage').textContent = 'Error searching patients';
+                document.getElementById('errorMessage').style.display = 'block';
+            });
     }
 
     function selectTemplate(type) {
@@ -603,53 +608,53 @@
         const type = document.querySelector('.template-option.selected').textContent.toLowerCase();
 
         fetch('{{ route("booking.saveTemplate") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
-            },
-            body: JSON.stringify({
-                name: name,
-                type: type,
-                content: message,
-                is_default: type === 'default'
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    name: name,
+                    type: type,
+                    content: message,
+                    is_default: type === 'default'
+                })
             })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Template saved successfully!');
-                fetchTemplates();
-            } else {
-                console.error('Template save failed:', data.error);
-                document.getElementById('errorMessage').textContent = data.error || 'Error saving template';
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Template saved successfully!');
+                    fetchTemplates();
+                } else {
+                    console.error('Template save failed:', data.error);
+                    document.getElementById('errorMessage').textContent = data.error || 'Error saving template';
+                    document.getElementById('errorMessage').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error saving template:', error);
+                document.getElementById('errorMessage').textContent = 'Error saving template';
                 document.getElementById('errorMessage').style.display = 'block';
-            }
-        })
-        .catch(error => {
-            console.error('Error saving template:', error);
-            document.getElementById('errorMessage').textContent = 'Error saving template';
-            document.getElementById('errorMessage').style.display = 'block';
-        });
+            });
     }
 
     function fetchTemplates() {
         fetch('{{ route("booking.getTemplates") }}', {
-            headers: {
-                'X-CSRF-TOKEN': csrfToken
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            templates = data.templates;
-            const currentType = document.querySelector('.template-option.selected').textContent.toLowerCase();
-            selectTemplate(currentType);
-        })
-        .catch(error => {
-            console.error('Error fetching templates:', error);
-            document.getElementById('errorMessage').textContent = 'Error fetching templates';
-            document.getElementById('errorMessage').style.display = 'block';
-        });
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                templates = data.templates;
+                const currentType = document.querySelector('.template-option.selected').textContent.toLowerCase();
+                selectTemplate(currentType);
+            })
+            .catch(error => {
+                console.error('Error fetching templates:', error);
+                document.getElementById('errorMessage').textContent = 'Error fetching templates';
+                document.getElementById('errorMessage').style.display = 'block';
+            });
     }
 
     function updatePreview() {
@@ -686,39 +691,55 @@
 
     function fetchDeliveryLog() {
         fetch('{{ route("booking.getDeliveryLog") }}', {
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Delivery log data:', data); // Debug response
-            const deliveryLog = document.getElementById('deliveryLog');
-            deliveryLog.innerHTML = '';
-            if (data.logs && data.logs.length) {
-                data.logs.forEach(log => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Delivery log data:', data);
+                const deliveryLog = document.getElementById('deliveryLog');
+                deliveryLog.innerHTML = '';
+                if (data.logs && data.logs.length) {
+                    const fragment = document.createDocumentFragment();
+                    data.logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        const statusClass = log.delivery_status === 'Delivered' || log.delivery_status === 'DeliveredToTerminal' || log.delivery_status === 'DeliveryNotificationNotSupported' ? 'status-delivered' :
+                            log.delivery_status === 'MessageWaiting' || log.delivery_status === 'Queued' || log.delivery_status === 'MessagePaused' ? 'status-queued' :
+                            log.delivery_status === 'DeliveredToNetwork' || log.delivery_status === 'DeliveryUncertain' || log.delivery_status === 'ForwardedToNetwork' ? 'status-noreport' :
+                            log.status === 'failed' || ['DeliveryImpossible', 'Insufficient_Balance', 'Invalid_Linkid', 'TeleserviceNotProvisioned', 'UserInBlacklist', 'UserAbnormalState', 'UserIsSuspended', 'NotSFCUser', 'UserNotSubscribed', 'UserNotExist', 'AbsentSubscriber', 'NOT_DELIVERED', 'MessageRejected', 'ReportNotHandled', 'InvalidMobile'].includes(log.delivery_status) ? 'status-failed' : 'status-noreport';
+                        row.innerHTML = `
                         <td>${log.appointment_number}</td>
                         <td>${log.specialization}</td>
                         <td>${log.appointment_date}</td>
                         <td>${log.message}</td>
-                        <td><span class="status-${log.status}">${log.status === 'sent' ? 'Sent' : 'Failed'}</span></td>
-                        <td>${log['status description'] || '-'}</td>
+                        <td>${log.message_id || '-'}</td>
+                        <td><span class="${log.status === 'sent' ? 'status-sent' : 'status-failed'}">${log.status === 'sent' ? 'Sent' : 'Failed'}</span></td>
+                        <td>${log.status_desc || '-'}</td>
+                        <td><span class="${statusClass}">${log.delivery_status || '-'}</span></td>
+                        <td>${log.delivery_desc || '-'}</td>
+                        <td>${log.delivery_time || '-'}</td>
+                        <td>${log.tat || '-'}</td>
                         <td>${log.sent_at}</td>
                     `;
-                    deliveryLog.appendChild(row);
-                });
-            } else {
-                deliveryLog.innerHTML = '<tr><td colspan="7">No logs found</td></tr>';
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching delivery log:', error);
-            document.getElementById('errorMessage').textContent = 'Error fetching delivery log';
-            document.getElementById('errorMessage').style.display = 'block';
-        });
+                        fragment.appendChild(row);
+                    });
+                    deliveryLog.appendChild(fragment);
+                } else {
+                    deliveryLog.innerHTML = '<tr><td colspan="12">No logs found</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching delivery log:', error);
+                document.getElementById('errorMessage').textContent = 'Error fetching delivery log: ' + error.message;
+                document.getElementById('errorMessage').style.display = 'block';
+            });
     }
 
     function sendMessages() {
@@ -741,63 +762,71 @@
         document.getElementById('errorMessage').style.display = 'none';
 
         fetch('{{ route("booking.sendBulkSMS") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
-            },
-            body: JSON.stringify({
-                recipients: selectedPatients,
-                message: message
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    recipients: selectedPatients,
+                    message: message
+                })
             })
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Send SMS response:', data); // Debug response
-            document.getElementById('sendBtn').disabled = false;
-            document.getElementById('progressBar').style.display = 'none';
-            document.getElementById('sendingStatus').textContent = `Sent ${data.success_count} messages, ${data.failed_count} failed`;
+            .then(response => response.json())
+            .then(data => {
+                console.log('Send SMS response:', data);
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('progressBar').style.display = 'none';
+                document.getElementById('sendingStatus').textContent = `Sent ${data.success_count} messages, ${data.failed_count} failed`;
 
-            const deliveryLog = document.getElementById('deliveryLog');
-            if (data.results && data.results.length) {
-                data.results.forEach(result => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
+                const deliveryLog = document.getElementById('deliveryLog');
+                if (data.results && data.results.length) {
+                    const fragment = document.createDocumentFragment();
+                    data.results.forEach(result => {
+                        const statusClass = result.status_code === '1' || result.status_code === '1000' ? 'status-sent' : 'status-failed';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
                         <td>${result.appointment_number}</td>
                         <td>${result.specialization}</td>
                         <td>${result.appointment_date}</td>
                         <td>${result.message}</td>
-                        <td><span class="status-${result.status_code === '1000' ? 'sent' : 'failed'}">${result.status_code === '1000' ? 'Sent' : 'Failed'}</span></td>
+                        <td>${result.message_id || '-'}</td>
+                        <td><span class="${statusClass}">${result.status_code === '1' || result.status_code === '1000' ? 'Sent' : 'Failed'}</span></td>
                         <td>${result.status_desc || '-'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
                         <td>${result.sent_at}</td>
                     `;
-                    deliveryLog.insertBefore(row, deliveryLog.firstChild);
-                });
-            } else {
-                console.warn('No results in response:', data);
-            }
+                        fragment.appendChild(row);
+                    });
+                    deliveryLog.insertBefore(fragment, deliveryLog.firstChild);
+                } else {
+                    console.warn('No results in response:', data);
+                }
 
-            if (data.success_count > 0) {
-                selectedPatients = [];
-                renderSelectedPatients();
-            }
-            fetchDeliveryLog(); // Refresh delivery log
-        })
-        .catch(error => {
-            console.error('Error sending messages:', error);
-            document.getElementById('sendBtn').disabled = false;
-            document.getElementById('progressBar').style.display = 'none';
-            document.getElementById('sendingStatus').textContent = '';
-            document.getElementById('errorMessage').textContent = 'Error sending messages';
-            document.getElementById('errorMessage').style.display = 'block';
-        });
+                if (data.success_count > 0) {
+                    selectedPatients = [];
+                    renderSelectedPatients();
+                }
+                fetchDeliveryLog();
+            })
+            .catch(error => {
+                console.error('Error sending messages:', error);
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('progressBar').style.display = 'none';
+                document.getElementById('sendingStatus').textContent = '';
+                document.getElementById('errorMessage').textContent = 'Error sending messages';
+                document.getElementById('errorMessage').style.display = 'block';
+            });
     }
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         renderSelectedPatients();
         fetchTemplates();
-        fetchDeliveryLog(); // Load delivery log on page load
+        fetchDeliveryLog();
         updatePreview();
         updateCharCount();
     });
