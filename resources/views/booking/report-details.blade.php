@@ -1,9 +1,13 @@
+```blade
 @extends('layouts.dashboard')
 
 @section('title', 'Appointment Report Generator')
 
 @section('content')
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<link href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 
 <div class="min-h-screen bg-gray-50 p-4">
     <div class="max-w-7xl mx-auto">
@@ -81,7 +85,7 @@
                         <select id="specialization" name="specialization" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="">All Specializations</option>
                             @foreach ($specializations as $specialization)
-                            <option value="{{ $specialization->id }}" {{ $selectedSpecialization == $specialization->id ? 'selected' : '' }}>{{ $specialization->name }}</option>
+                            <option value="{{ $specialization->id }}" {{ $selectedSpecialization == $specialization->id ? 'selected' : '' }}>{{ $specialization->display_name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -135,7 +139,7 @@
                         <select id="doctor" name="doctor" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="">All Doctors</option>
                             @foreach ($doctors as $doctor)
-                            <option value="{{ $doctor->id }}" {{ $selectedDoctor == $doctor->id ? 'selected' : '' }}>{{ $doctor->display_name }} - {{ $doctor->department ?? 'No Dept' }}</option>
+                            <option value="{{ $doctor->id }}" {{ $selectedDoctor == $doctor->id ? 'selected' : '' }}>{{ $doctor->display_name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -168,7 +172,7 @@
                             <option value="">All Tracing Statuses</option>
                             <option value="contacted" {{ $tracingStatus === 'contacted' ? 'selected' : '' }}>Contacted</option>
                             <option value="no response" {{ $tracingStatus === 'no response' ? 'selected' : '' }}>No Response</option>
-                            <!-- <option value="other" {{ $tracingStatus === 'other' ? 'selected' : '' }}>Other</option> -->
+                            <option value="other" {{ $tracingStatus === 'other' ? 'selected' : '' }}>Other</option>
                         </select>
                     </div>
                 </div>
@@ -195,53 +199,74 @@
                 <li>• Select your desired filters from the options above</li>
                 <li>• Leave filters empty to include all records for that category</li>
                 <li>• Click "Generate Report" to view the filtered results</li>
-                <li>• Export the report as PDF or print once generated</li>
+                <li>• Export the report as CSV for data manipulation</li>
             </ul>
         </div>
         @else
         <!-- Report Page -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div class="flex flex-col items-center">
-                <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2 justify-center">
-                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            <div class="flex justify-between items-center flex-wrap gap-4">
+                <!-- Back Button -->
+                <a href="{{ route('booking.detailed-report') }}"
+                    class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                     </svg>
-                    Appointment Report
-                </h1>
-                <p class="text-gray-600 mt-1 text-center">
-                    Generated on {{ \Carbon\Carbon::now()->format('j F, Y') }} at {{ \Carbon\Carbon::now()->format('h:i A') }}
-                </p>
-                <div class="flex gap-3 mt-4">
-                    <a href="{{ route('booking.detailed-report') }}" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    Back to Filters
+                </a>
+
+                <!-- Centered Title and Timestamp -->
+                <div class="text-center mb-4">
+                    <h1 class="text-2xl font-bold text-gray-900 inline-flex items-center gap-2 justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
+                            </path>
                         </svg>
-                        Back to Filters
-                    </a>
-                    <div class="relative">
-                        <button type="button" id="exportPdfButton" onclick="exportPdf()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        Appointment Report
+                    </h1>
+                    <p class="text-gray-600 mt-1 text-sm">
+                        Generated on {{ \Carbon\Carbon::now()->format('j F, Y') }} at {{ \Carbon\Carbon::now()->format('h:i A') }}
+                    </p>
+                </div>
+
+                <!-- Export Button -->
+                <div class="relative">
+                    <button type="submit" form="exportForm" name="export_csv" value="1" id="exportCsvButton"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Export CSV
+                        <div id="loader"
+                            class="hidden absolute inset-0 flex items-center justify-center bg-green-600 bg-opacity-75 rounded-lg">
+                            <svg class="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
                             </svg>
-                            Export PDF
-                            <div id="loader" class="hidden absolute inset-0 flex items-center justify-center bg-green-600 bg-opacity-75 rounded-lg">
-                                <svg class="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                            </div>
-                        </button>
-                    </div>
-                    <form id="exportForm" action="{{ route('booking.detailed-report') }}" method="GET" style="display: none;">
-                        @foreach (request()->all() as $key => $value)
-                        @if ($key !== 'export_pdf')
-                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
-                        @endif
-                        @endforeach
-                        <input type="hidden" name="export_pdf" value="1">
-                    </form>
+                        </div>
+                    </button>
                 </div>
             </div>
+
+            <!-- Hidden Export Form -->
+            <form id="exportForm" action="{{ route('booking.detailed-report') }}" method="GET" style="display: none;">
+                @csrf
+                @foreach (request()->all() as $key => $value)
+                @if ($key !== 'export_csv')
+                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                @endif
+                @endforeach
+                <input type="hidden" name="export_csv" value="1">
+            </form>
         </div>
 
         <!-- Applied Filters Summary -->
@@ -292,7 +317,7 @@
                 @endif
                 <div class="bg-gray-50 p-3 rounded-lg">
                     <p class="text-sm text-gray-600">Total Filtered Records</p>
-                    <p class="font-medium text-gray-900">{{ $appointments->count() }}</p>
+                    <p class="font-medium text-gray-900" id="totalRecords">{{ count($appointments) }}</p>
                 </div>
             </div>
         </div>
@@ -313,17 +338,17 @@
         @endif
 
         <!-- Report Table -->
-        @if ($appointments->isEmpty())
+        @if (empty($appointments))
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-600">
             No appointments found for the selected filters.
         </div>
         @else
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div class="p-6 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900">Appointment Details ({{ $appointments->count() }} records)</h2>
+                <h2 class="text-lg font-semibold text-gray-900">Appointment Details (<span id="recordCount">{{ count($appointments) }}</span> records)</h2>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full">
+                <table id="appointmentsTable" class="w-full">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
@@ -349,139 +374,300 @@
                             @endif
                         </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        @foreach ($appointments as $appointment)
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ $appointment->appointment_number ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                @if ($status === 'rescheduled')
-                                {{ $appointment->current_date ? \Carbon\Carbon::parse($appointment->current_date)->format('Y-m-d') : '-' }}
-                                @if ($appointment->current_time && $appointment->current_time !== '-')
-                                <br><span class="text-gray-500">{{ $appointment->current_time }}</span>
-                                @endif
-                                @else
-                                {{ $appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '-' }}
-                                @if ($appointment->appointment_time && $appointment->appointment_time !== '-')
-                                <br><span class="text-gray-500">{{ $appointment->appointment_time }}</span>
-                                @endif
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->full_name ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->doctor ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ $status === 'rescheduled' ? ($appointment->current_specialization ?? '-') : ($appointment->specialization ?? '-') }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                    @if (isset($appointment->appointment_status) && in_array($appointment->appointment_status, ['honoured', 'early', 'late']))
-                                        bg-green-100 text-green-800
-                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'missed')
-                                        bg-red-100 text-red-800
-                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'cancelled')
-                                        bg-gray-100 text-gray-800
-                                    @elseif (isset($appointment->appointment_status) && $appointment->appointment_status === 'rescheduled')
-                                        bg-purple-100 text-purple-800
-                                    @else
-                                        bg-yellow-100 text-yellow-800
-                                    @endif">
-                                    {{ isset($appointment->appointment_status) ? ucfirst($appointment->appointment_status) : 'Pending' }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                                    @if ($appointment->tracing_status === 'contacted')
-                                        bg-teal-100 text-teal-800
-                                    @elseif ($appointment->tracing_status === 'no response')
-                                        bg-orange-100 text-orange-800
-                                    @elseif ($appointment->tracing_status === 'other')
-                                        bg-blue-100 text-blue-800
-                                    @else
-                                        bg-gray-100 text-gray-800
-                                    @endif">
-                                    {{ $appointment->tracing_status ? ucfirst(str_replace('_', ' ', $appointment->tracing_status)) : '-' }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->tracing_message ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->tracing_date ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ $status === 'rescheduled' ? ($appointment->current_branch ?? '-') : ($appointment->hospital_branch ?? '-') }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ $appointment->booking_type ? ucfirst(str_replace('_', '-', $appointment->booking_type)) : '-' }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->notes ?? '-' }}</td>
-                            @if ($status === 'rescheduled')
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->previous_number ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->previous_specialization ?? '-' }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {{ $appointment->previous_date ? \Carbon\Carbon::parse($appointment->previous_date)->format('Y-m-d') : '-' }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->reason ?? '-' }}</td>
-                            @endif
-                            @if ($status === 'cancelled')
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ $appointment->cancellation_reason ?? '-' }}</td>
-                            @endif
-                        </tr>
-                        @endforeach
-                    </tbody>
+                    <tbody class="bg-white divide-y divide-gray-200"></tbody>
                 </table>
             </div>
         </div>
         @endif
-        @endif
 
-        <!-- JavaScript for toggling date range and handling export -->
+        <!-- JavaScript for DataTable and Form Handling -->
         <script>
+            // Toggle date range visibility based on time period selection
             function toggleCustomDateRange() {
-                const timePeriod = document.getElementById('timePeriod').value;
-                document.getElementById('startDateRange').style.display = timePeriod === 'custom' ? 'block' : 'none';
-                document.getElementById('endDateRange').style.display = timePeriod === 'custom' ? 'block' : 'none';
+                const timePeriodSelect = document.getElementById('timePeriod');
+                const startDateRange = document.getElementById('startDateRange');
+                const endDateRange = document.getElementById('endDateRange');
+
+                if (timePeriodSelect && startDateRange && endDateRange) {
+                    const timePeriod = timePeriodSelect.value;
+                    startDateRange.style.display = timePeriod === 'custom' ? 'block' : 'none';
+                    endDateRange.style.display = timePeriod === 'custom' ? 'block' : 'none';
+                }
             }
 
-            function exportPdf() {
-                const button = document.getElementById('exportPdfButton');
-                const loader = document.getElementById('loader');
-                const form = document.getElementById('exportForm');
-
-                // Show loader and disable button
-                loader.classList.remove('hidden');
-                button.disabled = true;
-
-                // Submit the form to initiate PDF download
-                form.submit();
-                // Note: Loader persists until the server responds with the PDF download.
-                // Since form submission may redirect or trigger a download, we do not attempt to hide the loader client-side.
-            }
-
+            // Reset filters and toggle date range
             function resetFilters() {
-                document.getElementById('filtersForm').reset();
-                toggleCustomDateRange();
+                const form = document.getElementById('filtersForm');
+                if (form) {
+                    form.reset();
+                    toggleCustomDateRange();
+                }
             }
 
+            // Show loader when export form is submitted
+            document.getElementById('exportForm')?.addEventListener('submit', () => {
+                const button = document.getElementById('exportCsvButton');
+                const loader = document.getElementById('loader');
+                if (button && loader) {
+                    loader.classList.remove('hidden');
+                    button.disabled = true;
+                    setTimeout(() => {
+                        button.disabled = false;
+                        loader.classList.add('hidden');
+                    }, 5000); // Timeout to prevent permanent disabled state
+                }
+            });
+
+            // Initialize DataTable
+            $(document).ready(function() {
+                if ($('#appointmentsTable').length) {
+                    const dataTable = $('#appointmentsTable').DataTable({
+                        processing: true,
+                        serverSide: true,
+                        ajax: {
+                            url: "{{ route('booking.detailed-report') }}",
+                            type: "GET",
+                            data: function(d) {
+                                const timePeriod = document.getElementById('timePeriod')?.value || "{{ $timePeriod }}";
+                                let startDate, endDate;
+
+                                // Dynamically set date range based on time_period
+                                if (timePeriod === 'day') {
+                                    startDate = "{{ \Carbon\Carbon::today()->toDateString() }}";
+                                    endDate = "{{ \Carbon\Carbon::today()->toDateString() }}";
+                                } else if (timePeriod === 'month') {
+                                    startDate = "{{ \Carbon\Carbon::now()->startOfMonth()->toDateString() }}";
+                                    endDate = "{{ \Carbon\Carbon::now()->endOfMonth()->toDateString() }}";
+                                } else if (timePeriod === 'year') {
+                                    startDate = "{{ \Carbon\Carbon::now()->startOfYear()->toDateString() }}";
+                                    endDate = "{{ \Carbon\Carbon::now()->endOfYear()->toDateString() }}";
+                                } else {
+                                    // Use form values for custom range
+                                    startDate = document.getElementById('startDate')?.value || "{{ $startDate }}";
+                                    endDate = document.getElementById('endDate')?.value || "{{ $endDate }}";
+                                }
+
+                                d.ajax = 1; // Use 1 instead of true to ensure boolean compatibility
+                                d.time_period = timePeriod;
+                                d.start_date = startDate;
+                                d.end_date = endDate;
+                                d.specialization = document.getElementById('specialization')?.value || "{{ $selectedSpecialization }}";
+                                d.status = document.getElementById('status')?.value || "{{ $status }}";
+                                d.branch = document.getElementById('hospitalBranch')?.value || "{{ $selectedBranch }}";
+                                d.doctor = document.getElementById('doctor')?.value || "{{ $selectedDoctor }}";
+                                d.booking_type = document.getElementById('bookingType')?.value || "{{ $bookingType }}";
+                                d.tracing_status = document.getElementById('tracingStatus')?.value || "{{ $tracingStatus }}";
+                                d._token = "{{ csrf_token() }}";
+                            },
+                            error: function(xhr, error, thrown) {
+                                console.error('DataTable AJAX error:', thrown, xhr.responseJSON);
+                                let errorMessage = 'Error loading table data: Unknown error';
+                                if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                                    errorMessage = 'Validation error: ' + Object.values(xhr.responseJSON.errors).flat().join(', ');
+                                } else if (xhr.responseJSON?.error) {
+                                    errorMessage = 'Error loading table data: ' + xhr.responseJSON.error;
+                                }
+                                alert(errorMessage);
+                            }
+                        },
+                        columns: [{
+                                data: 'appointment_number',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'appointment_date',
+                                render: function(data, type, row) {
+                                    const isRescheduled = "{{ $status }}" === 'rescheduled';
+                                    const date = isRescheduled ? (row.current_date || '-') : (row.appointment_date || '-');
+                                    const time = isRescheduled ? (row.current_time || '-') : (row.appointment_time || '-');
+                                    return date + (time !== '-' ? '<br><span class="text-gray-500 text-xs">' + time + '</span>' : '');
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'full_name',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'doctor',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'specialization',
+                                render: function(data, type, row) {
+                                    return "{{ $status }}" === 'rescheduled' ? (row.current_specialization || '-') : (row.specialization || '-');
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'appointment_status',
+                                render: function(data, type, row) {
+                                    const status = data || 'pending';
+                                    let className = '';
+                                    if (['honoured', 'early', 'late'].includes(status)) {
+                                        className = 'bg-green-100 text-green-800';
+                                    } else if (status === 'missed') {
+                                        className = 'bg-red-100 text-red-800';
+                                    } else if (status === 'cancelled') {
+                                        className = 'bg-gray-100 text-gray-800';
+                                    } else if (status === 'rescheduled') {
+                                        className = 'bg-purple-100 text-purple-800';
+                                    } else {
+                                        className = 'bg-yellow-100 text-yellow-800';
+                                    }
+                                    return '<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ' + className + '">' +
+                                        status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ') + '</span>';
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'tracing_status',
+                                render: function(data, type, row) {
+                                    const status = data || '-';
+                                    let className = '';
+                                    if (status === 'contacted') {
+                                        className = 'bg-teal-100 text-teal-800';
+                                    } else if (status === 'no response') {
+                                        className = 'bg-orange-100 text-orange-800';
+                                    } else if (status === 'other') {
+                                        className = 'bg-blue-100 text-blue-800';
+                                    } else {
+                                        className = 'bg-gray-100 text-gray-800';
+                                    }
+                                    return '<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ' + className + '">' +
+                                        (status === '-' ? '-' : status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())) + '</span>';
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'tracing_message',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'tracing_date',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'hospital_branch',
+                                render: function(data, type, row) {
+                                    return "{{ $status }}" === 'rescheduled' ? (row.current_branch || '-') : (row.hospital_branch || '-');
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'booking_type',
+                                defaultContent: '-',
+                                render: function(data, type, row) {
+                                    return data ? data.replace('_', '-') : '-';
+                                },
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'notes',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            @if($status === 'rescheduled') {
+                                data: 'previous_number',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'previous_specialization',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'previous_date',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            {
+                                data: 'reason',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            @endif
+                            @if($status === 'cancelled') {
+                                data: 'cancellation_reason',
+                                defaultContent: '-',
+                                className: 'px-6 py-4 whitespace-nowrap text-sm text-gray-900'
+                            },
+                            @endif
+                        ],
+                        pageLength: 10,
+                        lengthMenu: [10, 25, 50, 100],
+                        order: [
+                            [0, 'desc']
+                        ],
+                        language: {
+                            processing: '<div class="text-gray-600">Loading...</div>',
+                            emptyTable: 'No appointments found for the selected filters.',
+                            info: 'Showing _START_ to _END_ of _TOTAL_ records',
+                            infoEmpty: 'Showing 0 to 0 of 0 records',
+                            lengthMenu: 'Show _MENU_ records',
+                            search: 'Search:',
+                            paginate: {
+                                first: 'First',
+                                last: 'Last',
+                                next: 'Next',
+                                previous: 'Previous'
+                            }
+                        },
+                        drawCallback: function(settings) {
+                            const info = settings.json;
+                            if (info) {
+                                $('#recordCount').text(info.recordsFiltered);
+                                $('#totalRecords').text(info.recordsFiltered);
+                            }
+                        },
+                        initComplete: function() {
+                            this.api().columns().every(function() {
+                                const column = this;
+                                const header = $(column.header()).text().trim();
+                                if (header && !['Date & Time', 'Status', 'Tracing Status'].includes(header)) {
+                                    const select = $('<select class="w-full px-2 py-1 text-sm border border-gray-300 rounded"><option value="">All</option></select>')
+                                        .appendTo($(column.footer()).empty())
+                                        .on('change', function() {
+                                            const val = $.fn.dataTable.util.escapeRegex($(this).val());
+                                            column.search(val ? '^' + val + '$' : '', true, false).draw();
+                                        });
+
+                                    column.data().unique().sort().each(function(d, j) {
+                                        if (d && d !== '-') {
+                                            select.append('<option value="' + d + '">' + d + '</option>');
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    // Add column filters in footer
+                    $('#appointmentsTable thead tr').clone(true).appendTo('#appointmentsTable thead');
+                    $('#appointmentsTable thead tr:eq(1) th').each(function(i) {
+                        $(this).html('');
+                        if (!['Date & Time', 'Status', 'Tracing Status'].includes($(this).text().trim())) {
+                            $(this).html('<input type="text" placeholder="Filter..." class="w-full px-2 py-1 text-sm border border-gray-300 rounded" />');
+                            $('input', this).on('keyup change', function() {
+                                if (dataTable.column(i).search() !== this.value) {
+                                    dataTable.column(i).search(this.value).draw();
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Ensure date range visibility on page load
             toggleCustomDateRange();
         </script>
-
-        <!-- Print-specific styles -->
-        <style>
-            @media print {
-                .filters-section,
-                .action-buttons,
-                .info-section,
-                .back-button,
-                .export-buttons {
-                    display: none;
-                }
-
-                .report-container {
-                    box-shadow: none;
-                    border: none;
-                }
-
-                table {
-                    font-size: 0.8rem;
-                }
-            }
-        </style>
+        @endif
     </div>
-</div>
-@endsection
+    @endsection
+    ```

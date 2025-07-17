@@ -17,6 +17,7 @@
                 <th>Booking Type</th>
                 <th>Tracing Status</th>
                 <th>Appointment Status</th>
+                <th>HMIS Status</th>
                 <th>Notes</th>
                 <th>Doctor Comments</th>
                 <th>Cancellation Reason</th>

@@ -755,9 +755,14 @@
                             <i class="fas fa-check-circle"></i> Resolved
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ route('booking.reminders') }}" class="submenu-item">
+                            <i class="fas fa-bell me-2"></i>
+                            <span class="menu-text">SMS</span>
+                        </a>
+                    </li>
 
-
-                    <li class="nav-item"><a class="{{ Request::is('booking/reminders*') ? 'active' : '' }}"
+                    <!-- <li class="nav-item"><a class="{{ Request::is('booking/reminders*') ? 'active' : '' }}"
                             href="{{ route('booking.reminders') }}">
                             <i class="fas fa-bell me-2"></i> Reminders
                             @if(isset($reminderCount) && $reminderCount > 0)
@@ -767,7 +772,7 @@
                             </span>
                             @endif
                         </a>
-                    </li>
+                    </li> -->
                 </ul>
             </li>
             <li class="nav-item">
@@ -796,9 +801,9 @@
                     <i class="fas fa-chevron-down submenu-indicator"></i>
                 </a>
                 <ul class="submenu">
-                    <li><a href="{{ route('booking.reports') }}"><i class="fas fa-file-alt"></i> <span>Summery Report</span></a></li>
+                    <li><a href="{{ route('booking.reports') }}"><i class="fas fa-file-alt"></i> <span>Summary Report</span></a></li>
                     <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>Detailed Report</span></a></li>
-                    <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>HMIS Report</span></a></li>
+                    <!-- <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>HMIS Report</span></a></li> -->
                 </ul>
             </li>
 

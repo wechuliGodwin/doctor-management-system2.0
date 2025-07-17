@@ -18,6 +18,7 @@
                 <th>Booking Type</th>
                 <th>Tracing Status</th>
                 <th>Appointment Status</th>
+                <th>HMIS Status</th>
                 <th>Action</th>
             </tr>
         </thead>

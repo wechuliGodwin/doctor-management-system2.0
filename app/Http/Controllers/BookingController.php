@@ -836,7 +836,7 @@ class BookingController extends Controller
         // Validation rules
         $validationRules = [
             'ajax' => 'nullable|boolean',
-            'export_pdf' => 'nullable|boolean',
+            'export_csv' => 'nullable|boolean',
             'generate_report' => 'nullable|boolean',
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date',
@@ -845,7 +845,7 @@ class BookingController extends Controller
             'status' => 'nullable|in:all,pending,patients_seen,missed,cancelled,rescheduled,external_pending,external_approved,archived',
             'doctor' => 'nullable|exists:bk_doctor,id',
             'booking_type' => 'nullable|in:new,review,post_op',
-            'tracing_status' => 'nullable|in:contacted,no response,other', // Added tracing_status filter
+            'tracing_status' => 'nullable|in:contacted,no response,other',
         ];
 
         if ($isSuperadmin) {
@@ -931,8 +931,130 @@ class BookingController extends Controller
             'archived' => ['archived'],
         ];
 
-        // Handle status filtering
         $dashboardStatus = in_array($status, ['pending', 'patients_seen', 'missed']) ? 'all' : $status;
+
+        // Normalize appointments data
+        $normalizeAppointments = function ($appointments, $status, $tracingData) {
+            return $appointments->map(function ($appointment) use ($status, $tracingData) {
+                // Convert Eloquent model to array if necessary
+                if ($appointment instanceof \Illuminate\Database\Eloquent\Model) {
+                    $appointment = $appointment->toArray();
+                } else {
+                    $appointment = is_object($appointment) ? (array) $appointment : $appointment;
+                }
+
+                // Log appointment type and structure for debugging
+                Log::debug('Processing appointment in normalizeAppointments', [
+                    'appointment_id' => $appointment['id'] ?? 'unknown',
+                    'source_table' => $appointment['source_table'] ?? 'unknown',
+                    'data_type' => gettype($appointment),
+                    'has_attributes' => isset($appointment['*attributes']),
+                ]);
+
+                // Log appointment if appointment_date or created_at is missing
+                if (!isset($appointment['appointment_date']) || !isset($appointment['created_at'])) {
+                    Log::warning('Missing key in appointment data', [
+                        'appointment_id' => $appointment['id'] ?? 'unknown',
+                        'source_table' => $appointment['source_table'] ?? 'unknown',
+                        'missing_keys' => array_diff(['appointment_date', 'created_at'], array_keys($appointment)),
+                        'appointment_data' => $appointment,
+                    ]);
+                }
+
+                $tracing = isset($appointment['id']) && isset($tracingData[$appointment['id']]) ? $tracingData[$appointment['id']] : null;
+
+                return [
+                    'id' => $appointment['id'] ?? null,
+                    'appointment_number' => $appointment['appointment_number'] ?? $appointment['current_number'] ?? '-',
+                    'full_name' => $appointment['full_name'] ?? '-',
+                    'patient_number' => $appointment['patient_number'] ?? '-',
+                    'email' => $appointment['email'] ?? '-',
+                    'phone' => $appointment['phone'] ?? '-',
+                    'appointment_date' => $status === 'rescheduled' && isset($appointment['current_date'])
+                        ? ($appointment['current_date'] ? Carbon::parse($appointment['current_date'])->format('Y-m-d') : '-')
+                        : (isset($appointment['appointment_date']) && $appointment['appointment_date'] ? Carbon::parse($appointment['appointment_date'])->format('Y-m-d') : '-'),
+                    'appointment_time' => $status === 'rescheduled' ? ($appointment['current_time'] ?? '-') : ($appointment['appointment_time'] ?? '-'),
+                    'specialization' => $status === 'rescheduled' ? ($appointment['current_specialization'] ?? '-') : ($appointment['specialization'] ?? '-'),
+                    'doctor' => $appointment['doctor'] ?? '-',
+                    'booking_type' => $appointment['booking_type'] ?? '-',
+                    'appointment_status' => $status === 'rescheduled' ? 'rescheduled' : ($appointment['appointment_status'] ?? 'pending'),
+                    'tracing_status' => $tracing ? $tracing->tracing_status : ($appointment['tracing_status'] ?? '-'),
+                    'tracing_message' => $tracing ? $tracing->tracing_message : '-',
+                    'tracing_date' => $tracing ? Carbon::parse($tracing->tracing_date)->format('Y-m-d') : '-',
+                    'notes' => $appointment['notes'] ?? '-',
+                    'doctor_comments' => $appointment['doctor_comments'] ?? '-',
+                    'hospital_branch' => $status === 'rescheduled' ? ($appointment['current_branch'] ?? '-') : ($appointment['hospital_branch'] ?? '-'),
+                    'cancellation_reason' => $appointment['cancellation_reason'] ?? '-',
+                    'previous_number' => $status === 'rescheduled' ? ($appointment['previous_number'] ?? '-') : '-',
+                    'previous_specialization' => $status === 'rescheduled' ? ($appointment['previous_specialization'] ?? '-') : '-',
+                    'previous_date' => $status === 'rescheduled' && isset($appointment['previous_date'])
+                        ? ($appointment['previous_date'] ? Carbon::parse($appointment['previous_date'])->format('Y-m-d') : '-')
+                        : '-',
+                    'previous_time' => $status === 'rescheduled' ? ($appointment['previous_time'] ?? '-') : '-',
+                    'reason' => $status === 'rescheduled' ? ($appointment['reason'] ?? '-') : '-',
+                    'current_number' => $status === 'rescheduled' ? ($appointment['current_number'] ?? '-') : '-',
+                    'current_date' => $status === 'rescheduled' && isset($appointment['current_date'])
+                        ? ($appointment['current_date'] ? Carbon::parse($appointment['current_date'])->format('Y-m-d') : '-')
+                        : '-',
+                    'current_time' => $status === 'rescheduled' ? ($appointment['current_time'] ?? '-') : '-',
+                    'current_branch' => $status === 'rescheduled' ? ($appointment['current_branch'] ?? '-') : '-',
+                    'created_at' => isset($appointment['created_at']) && $appointment['created_at']
+                        ? Carbon::parse($appointment['created_at'])->format('Y-m-d H:i:s')
+                        : now()->format('Y-m-d H:i:s'),
+                    'source_table' => $appointment['source_table'] ?? 'unknown',
+                ];
+            })->unique('id')->values();
+        };
+
+        // Apply filters to appointments
+        $applyFilters = function ($appointments, $status, $statusMap, $selectedSpecialization, $selectedDoctor, $bookingType, $tracingStatus) {
+            $filteredAppointments = $appointments;
+
+            if (in_array($status, ['pending', 'patients_seen', 'missed'])) {
+                $filteredAppointments = $filteredAppointments->filter(function ($appointment) use ($statusMap, $status) {
+                    return in_array($appointment['appointment_status'], $statusMap[$status]);
+                })->values();
+            }
+
+            if ($selectedSpecialization) {
+                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+                if ($specName) {
+                    $filteredAppointments = $filteredAppointments->filter(function ($appointment) use ($specName, $status) {
+                        $specializationField = $status === 'rescheduled' ? 'current_specialization' : 'specialization';
+                        return isset($appointment[$specializationField]) && $appointment[$specializationField] === $specName;
+                    })->values();
+                } else {
+                    Log::warning('Specialization not found for ID: ' . $selectedSpecialization);
+                    $filteredAppointments = collect();
+                }
+            }
+
+            if ($selectedDoctor) {
+                $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
+                if ($doctorName) {
+                    $filteredAppointments = $filteredAppointments->filter(function ($appointment) use ($doctorName) {
+                        return isset($appointment['doctor']) && $appointment['doctor'] === $doctorName;
+                    })->values();
+                } else {
+                    Log::warning('Doctor not found for ID: ' . $selectedDoctor);
+                    $filteredAppointments = collect();
+                }
+            }
+
+            if ($bookingType) {
+                $filteredAppointments = $filteredAppointments->filter(function ($appointment) use ($bookingType) {
+                    return isset($appointment['booking_type']) && $appointment['booking_type'] === $bookingType;
+                })->values();
+            }
+
+            if ($tracingStatus) {
+                $filteredAppointments = $filteredAppointments->filter(function ($appointment) use ($tracingStatus) {
+                    return isset($appointment['tracing_status']) && $appointment['tracing_status'] === $tracingStatus;
+                })->values();
+            }
+
+            return $filteredAppointments;
+        };
 
         // Call dashboard method to fetch appointments
         $dashboardResponse = $this->dashboard($request, $dashboardStatus);
@@ -953,7 +1075,23 @@ class BookingController extends Controller
 
         $appointments = isset($data['appointments']) ? collect($data['appointments']) : collect();
 
-        // Fetch tracing data for appointments
+        // Log the raw appointments data for debugging
+        Log::info('Raw appointments data from dashboard', [
+            'appointment_count' => $appointments->count(),
+            'sample_appointments' => $appointments->take(2)->map(function ($item) {
+                return $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
+            })->toArray(),
+            'data_types' => $appointments->map(function ($item) {
+                return ['id' => $item->id ?? 'unknown', 'type' => gettype($item)];
+            })->toArray(),
+        ]);
+
+        // Convert all appointments to arrays to ensure consistency
+        $appointments = $appointments->map(function ($item) {
+            return $item instanceof \Illuminate\Database\Eloquent\Model ? $item->toArray() : (array) $item;
+        });
+
+        // Fetch tracing data
         $appointmentIds = $appointments->pluck('id')->filter()->unique()->toArray();
         $tracingData = [];
         if (!empty($appointmentIds)) {
@@ -963,97 +1101,161 @@ class BookingController extends Controller
                 ->get()
                 ->groupBy('appointment_id')
                 ->map(function ($group) {
-                    return $group->first(); // Get the most recent tracing record
+                    return $group->first();
                 });
         }
 
-        // Normalize appointments data with tracing information
-        $appointments = $appointments->map(function ($appointment) use ($status, $tracingData) {
-            $tracing = $tracingData[$appointment->id] ?? null;
-            $normalized = [
-                'id' => $appointment->id ?? null,
-                'appointment_number' => $appointment->appointment_number ?? $appointment->current_number ?? '-',
-                'full_name' => $appointment->full_name ?? '-',
-                'patient_number' => $appointment->patient_number ?? '-',
-                'email' => $appointment->email ?? '-',
-                'phone' => $appointment->phone ?? '-',
-                'appointment_date' => $status === 'rescheduled' && isset($appointment->current_date)
-                    ? ($appointment->current_date ? Carbon::parse($appointment->current_date)->format('Y-m-d') : '-')
-                    : ($appointment->appointment_date ? Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '-'),
-                'appointment_time' => $status === 'rescheduled' ? ($appointment->current_time ?? '-') : ($appointment->appointment_time ?? '-'),
-                'specialization' => $status === 'rescheduled' ? ($appointment->current_specialization ?? '-') : ($appointment->specialization ?? '-'),
-                'doctor' => $appointment->doctor ?? '-',
-                'booking_type' => $appointment->booking_type ?? '-',
-                'appointment_status' => $status === 'rescheduled' ? 'rescheduled' : ($appointment->appointment_status ?? 'pending'),
-                'tracing_status' => $tracing ? $tracing->tracing_status : ($appointment->tracing_status ?? '-'),
-                'tracing_message' => $tracing ? $tracing->tracing_message : '-',
-                'tracing_date' => $tracing ? Carbon::parse($tracing->tracing_date)->format('Y-m-d') : '-',
-                'notes' => $appointment->notes ?? '-',
-                'doctor_comments' => $appointment->doctor_comments ?? '-',
-                'hospital_branch' => $status === 'rescheduled' ? ($appointment->current_branch ?? '-') : ($appointment->hospital_branch ?? '-'),
-                'cancellation_reason' => $appointment->cancellation_reason ?? '-',
-                'previous_number' => $status === 'rescheduled' ? ($appointment->previous_number ?? '-') : '-',
-                'previous_specialization' => $status === 'rescheduled' ? ($appointment->previous_specialization ?? '-') : '-',
-                'previous_date' => $status === 'rescheduled' && $appointment->previous_date
-                    ? Carbon::parse($appointment->previous_date)->format('Y-m-d')
-                    : '-',
-                'previous_time' => $status === 'rescheduled' ? ($appointment->previous_time ?? '-') : '-',
-                'reason' => $status === 'rescheduled' ? ($appointment->reason ?? '-') : '-',
-                'current_number' => $status === 'rescheduled' ? ($appointment->current_number ?? '-') : '-',
-                'current_date' => $status === 'rescheduled' && $appointment->current_date
-                    ? Carbon::parse($appointment->current_date)->format('Y-m-d')
-                    : '-',
-                'current_time' => $status === 'rescheduled' ? ($appointment->current_time ?? '-') : '-',
-                'current_branch' => $status === 'rescheduled' ? ($appointment->current_branch ?? '-') : '-',
-                'created_at' => $appointment->created_at ? Carbon::parse($appointment->created_at)->format('Y-m-d H:i:s') : now()->format('Y-m-d H:i:s'),
-                'source_table' => $appointment->source_table ?? 'unknown',
+        // Normalize appointments
+        $appointments = $normalizeAppointments($appointments, $status, $tracingData);
+
+        // Apply filters
+        $appointments = $applyFilters($appointments, $status, $statusMap, $selectedSpecialization, $selectedDoctor, $bookingType, $tracingStatus);
+
+        // Handle AJAX request for DataTable
+        if ($request->has('ajax')) {
+            try {
+                return response()->json([
+                    'data' => $appointments->toArray(),
+                    'recordsTotal' => $appointments->count(),
+                    'recordsFiltered' => $appointments->count(),
+                ], 200, [], JSON_NUMERIC_CHECK);
+            } catch (\Exception $e) {
+                Log::error('AJAX query failed: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                return response()->json(['error' => 'Error loading table data: ' . $e->getMessage()], 500);
+            }
+        }
+
+        // Handle CSV export
+        if ($request->has('export_csv')) {
+            $filename = ($selectedBranch ? "{$selectedBranch}_" : "") . ($status !== 'all' ? "{$status}_" : "") . "detailed_report_" . now()->format('Ymd_His') . ".csv";
+            $headers = [
+                'Content-Type' => 'text/csv',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
             ];
-            return (object) $normalized;
-        })->unique('id')->values();
 
-        // Apply status filter for composite statuses
-        if (in_array($status, ['pending', 'patients_seen', 'missed'])) {
-            $appointments = $appointments->filter(function ($appointment) use ($statusMap, $status) {
-                return in_array($appointment->appointment_status, $statusMap[$status]);
-            })->values();
-        }
+            $columns = [
+                'appointment_number' => 'ID',
+                'full_name' => 'Patient',
+                'patient_number' => 'Patient Number',
+                'email' => 'Email',
+                'phone' => 'Phone',
+                'specialization' => 'Specialization',
+                'doctor' => 'Doctor',
+                'booking_type' => 'Type',
+                'appointment_status' => 'Status',
+                'tracing_status' => 'Tracing Status',
+                'tracing_message' => 'Tracing Message',
+                'tracing_date' => 'Tracing Date',
+                'appointment_date' => 'Date',
+                'appointment_time' => 'Time',
+                'hospital_branch' => 'Branch',
+                'notes' => 'Notes',
+                'doctor_comments' => 'Doctor Comments',
+            ];
 
-        // Apply additional filters
-        if ($selectedSpecialization) {
-            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-            if ($specName) {
-                $appointments = $appointments->filter(function ($appointment) use ($specName, $status) {
-                    $specializationField = $status === 'rescheduled' ? 'current_specialization' : 'specialization';
-                    return isset($appointment->$specializationField) && $appointment->$specializationField === $specName;
-                })->values();
-            } else {
-                Log::warning('Specialization not found for ID: ' . $selectedSpecialization);
-                $appointments = collect();
+            if ($status === 'rescheduled') {
+                $columns = [
+                    'appointment_number' => 'ID',
+                    'full_name' => 'Patient',
+                    'patient_number' => 'Patient Number',
+                    'email' => 'Email',
+                    'phone' => 'Phone',
+                    'previous_specialization' => 'Previous Specialization',
+                    'current_specialization' => 'Current Specialization',
+                    'doctor' => 'Doctor',
+                    'booking_type' => 'Type',
+                    'appointment_status' => 'Status',
+                    'tracing_status' => 'Tracing Status',
+                    'tracing_message' => 'Tracing Message',
+                    'tracing_date' => 'Tracing Date',
+                    'previous_date' => 'Previous Date',
+                    'previous_time' => 'Previous Time',
+                    'current_date' => 'Current Date',
+                    'current_time' => 'Current Time',
+                    'reason' => 'Reason',
+                    'previous_branch' => 'Previous Branch',
+                    'current_branch' => 'Current Branch',
+                    'notes' => 'Notes',
+                    'doctor_comments' => 'Doctor Comments',
+                ];
+            } elseif ($status === 'cancelled') {
+                $columns['cancellation_reason'] = 'Cancellation Reason';
             }
-        }
 
-        if ($selectedDoctor) {
-            $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
-            if ($doctorName) {
-                $appointments = $appointments->filter(function ($appointment) use ($doctorName) {
-                    return isset($appointment->doctor) && $appointment->doctor === $doctorName;
-                })->values();
-            } else {
-                Log::warning('Doctor not found for ID: ' . $selectedDoctor);
-                $appointments = collect();
+            $csvColumns = array_keys($columns);
+
+            // Log the data being prepared for CSV export
+            Log::info('Preparing CSV export', [
+                'filename' => $filename,
+                'appointment_count' => $appointments->count(),
+                'csv_columns' => $csvColumns,
+                'column_headers' => array_values($columns),
+                'sample_appointments' => $appointments->take(2)->toArray(),
+                'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
+            ]);
+
+            if ($appointments->isEmpty()) {
+                Log::warning('No appointments found for CSV export', [
+                    'filters' => [
+                        'branch' => $selectedBranch,
+                        'status' => $status,
+                        'time_period' => $timePeriod,
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                        'specialization' => $selectedSpecialization,
+                        'doctor' => $selectedDoctor,
+                        'booking_type' => $bookingType,
+                        'tracing_status' => $tracingStatus,
+                    ],
+                ]);
+                return response()->stream(function () {
+                    $file = fopen('php://output', 'w');
+                    fputcsv($file, ['No records found']);
+                    fclose($file);
+                }, 200, $headers);
             }
-        }
 
-        if ($bookingType) {
-            $appointments = $appointments->filter(function ($appointment) use ($bookingType) {
-                return isset($appointment->booking_type) && $appointment->booking_type === $bookingType;
-            })->values();
-        }
+            try {
+                return response()->stream(function () use ($appointments, $csvColumns, $columns) {
+                    $file = fopen('php://output', 'w');
+                    fputcsv($file, array_values($columns));
 
-        if ($tracingStatus) {
-            $appointments = $appointments->filter(function ($appointment) use ($tracingStatus) {
-                return isset($appointment->tracing_status) && $appointment->tracing_status === $tracingStatus;
-            })->values();
+                    foreach ($appointments as $appointment) {
+                        // Ensure $appointment is a flat array
+                        $appointment = is_object($appointment) ? (array) $appointment : $appointment;
+                        $row = [];
+                        foreach ($csvColumns as $col) {
+                            $value = $appointment[$col] ?? '-';
+                            // Convert any non-scalar values to string to avoid serialization issues
+                            if (is_array($value) || is_object($value)) {
+                                Log::warning('Non-scalar value detected in CSV export', [
+                                    'column' => $col,
+                                    'value' => $value,
+                                    'appointment_id' => $appointment['id'] ?? 'unknown',
+                                ]);
+                                $value = '-';
+                            }
+                            // Escape formulas for security
+                            if (is_string($value) && in_array($value[0] ?? '', ['=', '+', '-', '@'])) {
+                                $value = "'" . $value;
+                            }
+                            $row[] = $value;
+                        }
+                        fputcsv($file, $row);
+                    }
+                    fclose($file);
+                }, 200, $headers);
+            } catch (\Exception $e) {
+                Log::error('Failed to generate CSV: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString(),
+                    'filename' => $filename,
+                    'appointment_count' => $appointments->count(),
+                    'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
+                ]);
+                return redirect()->route('booking.detailed-report')->with('error', 'Failed to generate CSV: ' . $e->getMessage());
+            }
         }
 
         // Calculate totals
@@ -1064,7 +1266,8 @@ class BookingController extends Controller
             $baseQuery->where('hospital_branch', $selectedBranch);
         }
         if ($selectedSpecialization) {
-            $baseQuery->where('specialization', $selectedSpecialization);
+            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
+            $baseQuery->where('specialization', $specName);
         }
         if ($selectedDoctor) {
             $doctorName = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
@@ -1277,130 +1480,6 @@ class BookingController extends Controller
             return redirect()->route('booking.detailed-report')->with('error', 'Failed to calculate totals: ' . $e->getMessage());
         }
 
-        // Handle PDF export
-        if ($request->has('export_pdf')) {
-            $filename = ($selectedBranch ? "{$selectedBranch}_" : "") . ($status !== 'all' ? "{$status}_" : "") . "detailed_report_" . now()->format('Ymd_His') . ".pdf";
-
-            // Define table columns based on status
-            $columns = [
-                'appointment_number' => 'ID',
-                'full_name' => 'Patient',
-                'patient_number' => 'Patient Number',
-                'email' => 'Email',
-                'phone' => 'Phone',
-                'specialization' => 'Specialization',
-                'doctor' => 'Doctor',
-                'booking_type' => 'Type',
-                'appointment_status' => 'Status',
-                'tracing_status' => 'Tracing Status',
-                'tracing_message' => 'Tracing Message',
-                'tracing_date' => 'Tracing Date',
-                'appointment_date' => 'Date',
-                'appointment_time' => 'Time',
-                'hospital_branch' => 'Branch',
-                'notes' => 'Notes',
-                'doctor_comments' => 'Doctor Comments',
-            ];
-
-            if ($status === 'rescheduled') {
-                $columns = [
-                    'appointment_number' => 'ID',
-                    'full_name' => 'Patient',
-                    'patient_number' => 'Patient Number',
-                    'email' => 'Email',
-                    'phone' => 'Phone',
-                    'previous_specialization' => 'Previous Specialization',
-                    'current_specialization' => 'Current Specialization',
-                    'doctor' => 'Doctor',
-                    'booking_type' => 'Type',
-                    'appointment_status' => 'Status',
-                    'tracing_status' => 'Tracing Status',
-                    'tracing_message' => 'Tracing Message',
-                    'tracing_date' => 'Tracing Date',
-                    'previous_date' => 'Previous Date',
-                    'previous_time' => 'Previous Time',
-                    'current_date' => 'Current Date',
-                    'current_time' => 'Current Time',
-                    'reason' => 'Reason',
-                    'previous_branch' => 'Previous Branch',
-                    'current_branch' => 'Current Branch',
-                    'notes' => 'Notes',
-                    'doctor_comments' => 'Doctor Comments',
-                ];
-            } elseif ($status === 'cancelled') {
-                $columns['cancellation_reason'] = 'Cancellation Reason';
-            }
-
-            // Prepare filter summary
-            $filters = [];
-            if ($startDate || $endDate) {
-                $filters['Date Range'] = $startDate . ' to ' . ($endDate ?: 'Present');
-            }
-            if ($selectedSpecialization) {
-                $filters['Specialization'] = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-            }
-            if ($status && $status !== 'all') {
-                $filters['Status'] = ucfirst(str_replace('_', ' ', $status));
-            }
-            if ($selectedBranch) {
-                $filters['Hospital Branch'] = ucfirst($selectedBranch);
-            }
-            if ($selectedDoctor) {
-                $filters['Doctor'] = BkDoctor::where('id', $selectedDoctor)->value('doctor_name');
-            }
-            if ($bookingType) {
-                $filters['Booking Type'] = ucfirst(str_replace('_', '-', $bookingType));
-            }
-            if ($tracingStatus) {
-                $filters['Tracing Status'] = ucfirst(str_replace('_', ' ', $tracingStatus));
-            }
-
-            // Paginate appointments to reduce memory usage
-            $perPage = 100;
-            $appointmentsChunked = $appointments->chunk($perPage);
-
-            try {
-                if (!view()->exists('booking.pdf-report')) {
-                    throw new \Exception('PDF view booking.pdf-report does not exist.');
-                }
-
-                $pdfData = [
-                    'appointments' => $appointments,
-                    'columns' => $columns,
-                    'totals' => $totals,
-                    'filters' => $filters,
-                    'generated_at' => Carbon::now()->format('F j, Y \a\t h:i A'),
-                    'title' => 'Appointment Report',
-                ];
-
-                Log::info('Preparing to generate PDF', [
-                    'filename' => $filename,
-                    'appointment_count' => count($appointments),
-                    'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
-                ]);
-
-                $pdf = Pdf::loadView('booking.pdf-report', $pdfData);
-                $pdf->setPaper('A4', 'portrait');
-                $pdf->setOptions([
-                    'isHtml5ParserEnabled' => true,
-                    'isRemoteEnabled' => true,
-                    'dpi' => 150,
-                    'defaultFont' => 'Times-New-Roman',
-                    'isPhpEnabled' => true,
-                ]);
-
-                return $pdf->stream($filename);
-            } catch (\Exception $e) {
-                Log::error('Failed to generate PDF: ' . $e->getMessage(), [
-                    'trace' => $e->getTraceAsString(),
-                    'filename' => $filename,
-                    'appointment_count' => count($appointments),
-                    'memory_usage' => memory_get_usage() / 1024 / 1024 . ' MB',
-                ]);
-                return redirect()->route('booking.detailed-report')->with('error', 'Failed to generate PDF: ' . $e->getMessage());
-            }
-        }
-
         $data = [
             'hospitalBranches' => $hospitalBranches,
             'specializations' => $specializations,
@@ -1416,7 +1495,7 @@ class BookingController extends Controller
             'endDate' => $endDate,
             'timePeriod' => $timePeriod,
             'status' => $status,
-            'appointments' => $appointments,
+            'appointments' => $appointments->toArray(),
             'totals' => $totals,
             'showReport' => $showReport,
         ];
@@ -1434,7 +1513,7 @@ class BookingController extends Controller
                     ExternalApproved::query()
                         ->select([
                             'hospital_branch',
-                            'COUNT(*) as total_bookings',
+                            DB::raw('COUNT(*) as total_bookings'),
                         ])
                         ->whereBetween('appointment_date', [$startDate, $endDate])
                         ->groupBy('hospital_branch')
@@ -1447,7 +1526,7 @@ class BookingController extends Controller
                         'hospital_branch',
                         DB::raw('COUNT(*) as total_bookings'),
                     ])
-                    ->where('specialization', $selectedSpecialization)
+                    ->where('specialization', $specName)
                     ->where('appointment_status', '!=', 'rescheduled')
                     ->whereBetween('appointment_date', [$startDate, $endDate])
                     ->groupBy('hospital_branch')
@@ -1464,7 +1543,7 @@ class BookingController extends Controller
             }
 
             if ($tracingStatus) {
-                $branchQuery = $branchQuery->whereExists(function ($query) use ($tracingStatus) {
+                $branchQuery->whereExists(function ($query) use ($tracingStatus) {
                     $query->select(DB::raw(1))
                         ->from('bk_tracing')
                         ->whereColumn('bk_tracing.appointment_id', 'bk_appointments.id')
@@ -1565,11 +1644,11 @@ class BookingController extends Controller
                             'bk_appointments.doctor_name as doctor',
                             'bk_appointments.booking_type',
                             'bk_appointments.appointment_status',
+                            'bk_appointments.hmis_visit_status',
                             DB::raw("(select status from bk_tracing a where a.appointment_id = bk_appointments.id order by tracing_date desc limit 1) as tracing_status"),
                             DB::raw('NULL as notes'),
                             'bk_appointments.doctor_comments',
                             'bk_appointments.hospital_branch',
-                            'bk_appointments.hmis_visit_status',
                             'bk_appointments.visit_date',
                             'bk_appointments.created_at',
                             DB::raw("'$status' as source_table"),
@@ -1729,6 +1808,7 @@ class BookingController extends Controller
                             'bk_appointments.doctor_name as doctor',
                             'bk_appointments.booking_type',
                             'bk_appointments.appointment_status',
+                            'bk_appointments.hmis_visit_status',
                             DB::raw("(select status from bk_tracing a where a.appointment_id = bk_appointments.id order by tracing_date desc limit 1) as tracing_status"),
                             DB::raw('NULL as notes'),
                             'bk_appointments.doctor_comments',
@@ -1757,6 +1837,7 @@ class BookingController extends Controller
                             DB::raw('NULL as doctor'),
                             DB::raw('NULL as booking_type'),
                             'status as appointment_status',
+                            DB::raw('NULL as hmis_visit_status'),
                             DB::raw('NULL as tracing_status'),
                             'notes',
                             DB::raw('NULL as doctor_comments'),
@@ -1782,6 +1863,7 @@ class BookingController extends Controller
                             'hospital_branch',
                             DB::raw('NULL as booking_type'),
                             'appointment_status',
+                            DB::raw('NULL as hmis_visit_status'),
                             DB::raw("(select status from bk_tracing a where a.appointment_id = external_approveds.id order by tracing_date desc limit 1) as tracing_status"),
                             'notes',
                             'doctor_comments',
@@ -1805,6 +1887,7 @@ class BookingController extends Controller
                             'doctor_name as doctor',
                             'booking_type',
                             DB::raw('"cancelled" as appointment_status'),
+                            DB::raw('NULL as hmis_visit_status'),
                             DB::raw("(select status from bk_tracing a where a.appointment_id = cancelled_appointments.id order by tracing_date desc limit 1) as tracing_status"),
                             'notes',
                             DB::raw('NULL as doctor_comments'),
@@ -1864,6 +1947,7 @@ class BookingController extends Controller
                                 'doctor' => $appointment->doctor ?? '-',
                                 'booking_type' => $appointment->booking_type ?? '-',
                                 'appointment_status' => $appointment->appointment_status ?? 'pending',
+                                'hmis_visit_status' => $appointment->hmis_visit_status ?? 'pending',
                                 'tracing_status' => $appointment->tracing_status ?? '-',
                                 'notes' => $appointment->notes ?? '-',
                                 'doctor_comments' => $appointment->doctor_comments ?? '-',
@@ -1938,6 +2022,7 @@ class BookingController extends Controller
                             'doctor' => $appointment->doctor ?? '-',
                             'booking_type' => $appointment->booking_type ?? '-',
                             'appointment_status' => $appointment->appointment_status ?? '-',
+                            'hmis_visit_status' => $appointment->hmis_visit_status ?? '-',
                             'notes' => $appointment->notes ?? '-',
                             'tracing_status' => $appointment->tracing_status ?? '-',
                             'doctor_comments' => $appointment->doctor_comments ?? '-',
@@ -2384,7 +2469,7 @@ class BookingController extends Controller
             'full_name' => 'required|string|max:255',
             'patient_number' => 'required|string|max:50',
             'email' => 'nullable|email|max:100',
-            'appointment_date' => 'required|date',
+            'appointment_date' => 'required|date|after_or_equal:today',
             'appointment_time' => 'nullable',
             'specialization' => 'required|string|max:255',
             'doctor_name' => 'nullable|string|max:100',
@@ -3792,7 +3877,7 @@ class BookingController extends Controller
     {
         $validated = $request->validate([
             'specialization_id' => 'required|exists:specializations,specialization_id',
-            'daily_limit' => 'required|integer|min:1',
+            'daily_limit' => 'required|integer|min:0',
             'group_id' => 'required|integer',
             'day_of_week' => 'required|string'
         ]);
@@ -3831,7 +3916,7 @@ class BookingController extends Controller
                 if ($newStatus !== $appointment->$statusColumn) {
                     $appointment->$statusColumn = $newStatus;
                     $appointment->save();
-                    \Log::info("Updated past appointment status", [
+                    Log::info("Updated past appointment status", [
                         'table' => $table,
                         'id' => $appointment->id,
                         'new_status' => $newStatus,

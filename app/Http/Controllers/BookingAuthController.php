@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\BookingUserAuth;
 use App\Models\BkDoctor;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Password;
@@ -638,7 +639,7 @@ class BookingAuthController extends Controller
      */
     protected function getDepartmentEnumValues()
     {
-        return ['cardiology', 'neurology', 'orthopedics', 'pediatrics', 'general'];
+        return DB::table('bk_doctor')->distinct()->pluck('department')->filter()->values()->toArray();
     }
 
     /**

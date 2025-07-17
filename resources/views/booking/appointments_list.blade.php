@@ -64,6 +64,7 @@
                     <ul class="custom-dropdown-menu" id="actionDropdownMenu">
                         <li><a class="custom-dropdown-item" href="#" id="mark-came">Mark selected as came</a></li>
                         <li><a class="custom-dropdown-item" href="#" id="mark-missed">Mark selected as missed</a></li>
+                        <li><a class="custom-dropdown-item" href="#" id="send-reminders">Send Reminders</a></li>
                     </ul>
                 </div>
             </div>
@@ -675,6 +676,10 @@
                     defaultContent: '-'
                 },
                 {
+                    data: 'hmis_visit_status',
+                    defaultContent: '-'
+                },
+                {
                     data: 'notes',
                     defaultContent: '-'
                 },
@@ -811,6 +816,10 @@
                     data: 'appointment_status',
                     defaultContent: '-'
                 },
+                // {
+                //     data: 'hmis_visit_status',
+                //     defaultContent: '-'
+                // },
                 {
                     data: null,
                     orderable: false,
@@ -1593,6 +1602,36 @@
             $('#actionDropdownMenu').removeClass('show');
         });
 
+        $(document).on('click', '#send-reminders', function(e) {
+            e.preventDefault();
+            const selectedRows = table.rows('.selected').data().toArray();
+            if (!selectedRows.length) {
+                alert('No rows selected.');
+                return;
+            }
+
+            const appointmentIds = selectedRows.map(row => row.id);
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ route("booking.reminders") }}';
+
+            const csrfField = document.createElement('input');
+            csrfField.type = 'hidden';
+            csrfField.name = '_token';
+            csrfField.value = '{{ csrf_token() }}';
+            form.appendChild(csrfField);
+
+            const idsField = document.createElement('input');
+            idsField.type = 'hidden';
+            idsField.name = 'selected_ids';
+            idsField.value = JSON.stringify(appointmentIds);
+            form.appendChild(idsField);
+
+            document.body.appendChild(form);
+            form.submit();
+            $('#actionDropdownMenu').removeClass('show');
+        });
+
         $('#export-csv-btn').on('click', () => {
             const visibleData = table.rows({
                 search: 'applied'
@@ -1604,7 +1643,7 @@
 
             let headers = [];
             if (status === 'all') {
-                headers = ['Appointment No.', 'Pt Name', 'Pt No.', 'Phone', 'Email', 'Date', 'Time', 'Doctor', 'Specialization', 'Branch', 'Booking Type', 'Appointment Status', 'Notes', 'Doctor Comments', 'Cancellation Reason'];
+                headers = ['Appointment No.', 'Pt Name', 'Pt No.', 'Phone', 'Email', 'Date', 'Time', 'Doctor', 'Specialization', 'Branch', 'Booking Type', 'Appointment Status', 'hmis_visit_status', 'Notes', 'Doctor Comments', 'Cancellation Reason'];
             } else if (status === 'external_pending') {
                 headers = ['Appointment No.', 'Pt Name', 'Pt No.', 'Phone', 'Email', 'Date', 'Specialization', 'Appointment Status'];
             } else if (status === 'external_approved') {
@@ -1614,7 +1653,7 @@
             } else if (status === 'rescheduled') {
                 headers = ['Prev App No.', 'Pt Name.', 'Prev Spec.', 'Prev Appt Date.', 'Prev Appt Time.', 'To.', 'Cur App No.', 'Cur Spec.', 'Cur Appt Date.', 'Cur Appt Time.', 'Reason.'];
             } else {
-                headers = ['Appointment No.', 'Pt Name', 'Pt No.', 'Phone', 'Email', 'Date', 'Time', 'Doctor', 'Specialization', 'Booking Type', 'Appointment Status'];
+                headers = ['Appointment No.', 'Pt Name', 'Pt No.', 'Phone', 'Email', 'Date', 'Time', 'Doctor', 'Specialization', 'Booking Type', 'Appointment Status', 'hmis_visit_status'];
             }
 
             const csvRows = [headers];
@@ -1637,6 +1676,7 @@
                         row.hospital_branch || '-',
                         row.booking_type || '-',
                         row.appointment_status || '-',
+                        row.hmis_visit_status || '-',
                         row.notes || '-',
                         row.doctor_comments || '-',
                         row.cancellation_reason || '-'
@@ -1719,7 +1759,8 @@
                         row.doctor || '-',
                         row.specialization || '-',
                         row.booking_type || '-',
-                        row.appointment_status || '-'
+                        row.appointment_status || '-',
+                        row.hmis_visit_status || '-'
                     ];
                 }
                 csvRows.push(rowData);
