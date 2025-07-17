@@ -337,9 +337,9 @@ Route::post('/booking/specialization-limits/update', [BookingController::class, 
 //calender
 Route::get('/booking/calendar', [BookingController::class, 'calendar'])->middleware('web', 'auth.booking')->name('booking.calendar');
 Route::post('/booking/add-holiday', [BookingController::class, 'addHoliday'])->middleware('web', 'auth.booking')->name('booking.addHoliday');
-Route::get('/booking/reminders', [BookingController::class, 'reminders'])->name('booking.reminders');
-Route::post('booking/{id}/clear', [BookingController::class, 'clearAppointment'])->name('booking.clear');
-Route::post('booking/bulk-clear-reminders', [BookingController::class, 'bulkClearReminders'])->name('booking.bulkClearReminders');
+// Route::get('/booking/reminders', [BookingController::class, 'reminders'])->name('booking.reminders');
+// Route::post('booking/{id}/clear', [BookingController::class, 'clearAppointment'])->name('booking.clear');
+// Route::post('booking/bulk-clear-reminders', [BookingController::class, 'bulkClearReminders'])->name('booking.bulkClearReminders');
 Route::get('/booking/add', [BookingController::class, 'add'])->name('booking.add');
 Route::post('/booking/appointments/save-tracing', [BookingController::class, 'saveBookingTracing'])->name('booking.save-tracing');
 Route::get('/appointments/status-filter/{status}', [BookingController::class, 'dashboard'])->name('booking.status-filter');
@@ -375,7 +375,7 @@ Route::post('/booking/logout', [BookingAuthController::class, 'bookingLogout'])-
 // Route::post('/booking/logout', [BookingAuthController::class, 'logout'])->name('booking.logout');
 Route::get('/booking/password/reset', [BookingAuthController::class, 'showBookingForgotPasswordForm'])->name('booking.password.request');
 Route::post('/booking/password/email', [BookingAuthController::class, 'sendBookingResetLinkEmail'])->name('booking.password.email');
-Route::get('/booking/password/reset/{token}', [BookingAuthController::class, 'showBookingResetPasswordForm'])->name('booking.password.reset');
+Route::get('/booking/password/reset/{token}', [BookingAuthController::class, 'showBookingResetPasswordForm'])->name(name: 'booking.password.reset');
 Route::post('/booking/password/reset', [BookingAuthController::class, 'resetBookingPassword'])->name('booking.password.update');
 
 //booking alerts
@@ -394,13 +394,12 @@ Route::get('/alerts/patients', [AlertController::class, 'getPatients'])->name('a
 Route::get('/booking/branch/{branch}', [App\Http\Controllers\BookingController::class, 'booked_branch'])->name('booking.branch');
 Route::get('/booking/doctor/diary', [BookingDoctorController::class, 'bookingDiary'])->middleware('web', 'auth.booking')->name('booking.doctor.diary');
 //SMS Integration Routes
-Route::get('/booking/sms', [SmsIntergrationController::class, 'show'])->name('booking.sms');
-Route::post('/booking/send_sms', [SmsIntergrationController::class, 'sendSingleSMS'])->name('booking.send');
 
 Route::match(['get', 'post'], '/booking/sms/reminders', [SmsIntergrationController::class, 'showBulk'])->name('booking.reminders');
+Route::get('/booking/sms/delivery-log', [SmsIntergrationController::class, 'showDeliveryLog'])->name('booking.delivery_log');
 Route::get('/booking/sms/search', [SmsIntergrationController::class, 'searchPatients'])->name('booking.searchPatients');
 Route::post('/booking/sms/send-bulk-sms', [SmsIntergrationController::class, 'sendBulkSMS'])->name('booking.sendBulkSMS');
-Route::get('/booking/sms/delivery-log', [SmsIntergrationController::class, 'getDeliveryLog'])->name('booking.getDeliveryLog');
+Route::get('/booking/sms/delivery-log-data', [SmsIntergrationController::class, 'getDeliveryLog'])->name('booking.getDeliveryLog');
 Route::get('/booking/sms/message-templates', [SmsIntergrationController::class, 'getTemplates'])->name('booking.getTemplates');
 Route::post('/booking/sms/save-template', [SmsIntergrationController::class, 'saveTemplate'])->name('booking.saveTemplate');
 

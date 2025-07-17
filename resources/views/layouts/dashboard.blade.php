@@ -541,44 +541,44 @@
 
                     <!-- Admin Branch Selector (only show if user is admin) -->
                     <!-- @if(Auth::guard('booking')->user()->role === 'admin')
-                                                                                <li class="nav-item dropdown me-3">
-                                                                                    <a class="nav-link dropdown-toggle text-white" href="#" id="branchDropdown" role="button"
-                                                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                                                        Current Branch:
-                                                                                        {{ ucfirst($selectedBranch ?? Auth::guard('booking')->user()->hospital_branch) }}
-                                                                                    </a>
-                                                                                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="branchDropdown">
-                                                                                        <li>
-                                                                                            <form action="{{ route('booking.dashboard') }}" method="GET">
-                                                                                                <button type="submit" class="dropdown-item" {{ !isset($selectedBranch) ? 'disabled' : '' }}>
-                                                                                                    All Branches
-                                                                                                </button>
-                                                                                            </form>
-                                                                                        </li>
-                                                                                        @php
-                                                                                            $hospitalBranches = $hospitalBranches ?? ['kijabe', 'westlands', 'naivasha', 'marira'];
-                                                                                        @endphp
-                                                                                        @foreach($hospitalBranches as $branch)
-                                                                                            <li>
-                                                                                                <form action="{{ route('booking.dashboard') }}" method="GET">
-                                                                                                    <input type="hidden" name="branch" value="{{ $branch }}">
-                                                                                                    <button type="submit" class="dropdown-item" {{ ($selectedBranch ?? '') === $branch ? 'disabled' : '' }}>
-                                                                                                        {{ ucfirst($branch) }}
-                                                                                                    </button>
-                                                                                                </form>
-                                                                                            </li>
-                                                                                        @endforeach
-                                                                                    </ul>
-                                                                                </li>
-                                                                            @endif -->
+                            <li class="nav-item dropdown me-3">
+                            <a class="nav-link dropdown-toggle text-white" href="#" id="branchDropdown" role="button"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                                Current Branch:
+                                {{ ucfirst($selectedBranch ?? Auth::guard('booking')->user()->hospital_branch) }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="branchDropdown">
+                                <li>
+                                    <form action="{{ route('booking.dashboard') }}" method="GET">
+                                        <button type="submit" class="dropdown-item" {{ !isset($selectedBranch) ? 'disabled' : '' }}>
+                                            All Branches
+                                        </button>
+                                    </form>
+                                </li>
+                                @php
+                                    $hospitalBranches = $hospitalBranches ?? ['kijabe', 'westlands', 'naivasha', 'marira'];
+                                @endphp
+                                @foreach($hospitalBranches as $branch)
+                                    <li>
+                                        <form action="{{ route('booking.dashboard') }}" method="GET">
+                                            <input type="hidden" name="branch" value="{{ $branch }}">
+                                            <button type="submit" class="dropdown-item" {{ ($selectedBranch ?? '') === $branch ? 'disabled' : '' }}>
+                                                {{ ucfirst($branch) }}
+                                            </button>
+                                        </form>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </li>
+                    @endif -->
 
                     <!-- Raise Alert Button (uncomment if needed) -->
                     <!--
-                                                                            <li class="nav-item me-3">
-                                                                                <button type="button" class="btn stylish-alert-btn" data-bs-toggle="modal"
-                                                                                    data-bs-target="#raiseAlertModal">+ Raise Alert</button>
-                                                                            </li>
-                                                                            -->
+                    <li class="nav-item me-3">
+                        <button type="button" class="btn stylish-alert-btn" data-bs-toggle="modal"
+                            data-bs-target="#raiseAlertModal">+ Raise Alert</button>
+                    </li>
+                    -->
 
                     <!-- Settings Dropdown -->
                     <li class="nav-item dropdown">
@@ -743,25 +743,29 @@
                     <i class="fas fa-chevron-down submenu-indicator"></i>
                 </a>
                 <ul class="submenu">
-                    <li class="nav-item">
+                    <li>
                         <a class="{{ Request::is('booking/alerts*') ? 'active' : '' }}"
                             href="{{ route('booking.alerts') }}">
                             <i class="fas fa-bell me-2"></i> Active
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li>
                         <a class="{{ Request::is('booking/resolved-alerts*') ? 'active' : '' }}"
                             href="{{ route('booking.resolved_alerts') }}">
                             <i class="fas fa-check-circle"></i> Resolved
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a href="{{ route('booking.reminders') }}" class="submenu-item">
-                            <i class="fas fa-bell me-2"></i>
-                            <span class="menu-text">SMS</span>
+                    <li class="has_submenu">
+                        <a href="javascript:void(0)" class="submenu-toggle">
+                            <i class="fas fa-bell"></i>
+                            <span class="menu-text">Reminders</span>
+                            <i class="fas fa-chevron-down submenu-indicator"></i>
                         </a>
+                        <ul class="submenu">
+                            <li><a href="{{ route('booking.reminders') }}"><i class="fas fa-sms"></i> Send Reminder</a></li>
+                            <li><a href="{{ route('booking.delivery_log') }}"><i class="fas fa-clipboard-list"></i> Delivery Log</a></li>
+                        </ul>
                     </li>
-
                     <!-- <li class="nav-item"><a class="{{ Request::is('booking/reminders*') ? 'active' : '' }}"
                             href="{{ route('booking.reminders') }}">
                             <i class="fas fa-bell me-2"></i> Reminders

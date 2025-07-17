@@ -12,6 +12,10 @@ use Carbon\Carbon;
 
 class SmsIntergrationController extends Controller
 {
+    public function showDeliveryLog(Request $request)
+    {
+        return view('booking.delivery_log');
+    }
     public function showBulk(Request $request)
     {
         // Handle both GET and POST by checking the request method
@@ -45,7 +49,7 @@ class SmsIntergrationController extends Controller
                 })->toArray();
         }
 
-        return view('booking.sms', [
+        return view('booking.reminders', [
             'selectedAppointments' => $appointments
         ]);
     }

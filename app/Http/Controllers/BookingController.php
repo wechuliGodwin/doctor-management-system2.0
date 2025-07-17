@@ -4170,238 +4170,6 @@ class BookingController extends Controller
 
         return $appointments->sortBy('appointment_date');
     }
-
-    protected function sendAppointmentReminders()
-    {
-        $today = now()->startOfDay();
-        $twoDaysAhead = $today->copy()->addDays(2)->startOfDay();
-        $oneWeekAhead = $today->copy()->addDays(7)->startOfDay();
-        $oneWeekAgo = $today->copy()->subWeek()->startOfDay();
-
-        // Get current user's branch
-        $userBranch = Auth::guard('booking')->user()->hospital_branch;
-
-        $queries = [
-            'new' => NewAppointment::class,
-            'review' => ReviewAppointment::class,
-            'postop' => PostOpAppointment::class,
-            'external_approved' => ExternalApproved::class,
-        ];
-
-        foreach ($queries as $type => $model) {
-            // Query for appointments on the exact day
-            $queryToday = $model::whereDate('appointment_date', $today)
-                ->where('appointment_status', 'approved')
-                ->where('reminder_cleared', false)
-                ->when($userBranch, function ($q) use ($userBranch) {
-                    return $q->where('hospital_branch', $userBranch);
-                });
-
-            // Query for two days ahead (for bookings made at least a week ago)
-            $queryTwoDays = $model::whereDate('appointment_date', $twoDaysAhead)
-                ->whereDate('created_at', '<=', $oneWeekAgo)
-                ->where('appointment_status', 'approved')
-                ->where('reminder_cleared', false)
-                ->when($userBranch, function ($q) use ($userBranch) {
-                    return $q->where('hospital_branch', $userBranch);
-                });
-
-            // Query for one week ahead
-            $queryOneWeek = $model::whereDate('appointment_date', $oneWeekAhead)
-                ->where('appointment_status', 'approved')
-                ->where('reminder_cleared', false)
-                ->when($userBranch, function ($q) use ($userBranch) {
-                    return $q->where('hospital_branch', $userBranch);
-                });
-
-            // Apply patient_notified filter only for ExternalApproved
-            if ($type === 'external_approved') {
-                $appointmentsToday = $queryToday->where('patient_notified', false)->get();
-                $appointmentsTwoDays = $queryTwoDays->where('patient_notified', false)->get();
-                $appointmentsOneWeek = $queryOneWeek->where('patient_notified', false)->get();
-            } else {
-                $appointmentsToday = $queryToday->get();
-                $appointmentsTwoDays = $queryTwoDays->get();
-                $appointmentsOneWeek = $queryOneWeek->get();
-            }
-
-            // Send reminders for all applicable appointments
-            foreach ([$appointmentsToday, $appointmentsTwoDays, $appointmentsOneWeek] as $appointments) {
-                foreach ($appointments as $appt) {
-                    if ($appt->email && $appt->email !== 'N/A') {
-                        Mail::to($appt->email)->send(new AppointmentReminder($appt));
-                        if ($type === 'external_approved') {
-                            $appt->patient_notified = true;
-                            $appt->save();
-                        }
-                        \Log::info("Reminder sent", [
-                            'id' => $appt->id,
-                            'type' => $type,
-                            'appointment_date' => $appt->appointment_date,
-                            'email' => $appt->email,
-                            'branch' => $userBranch
-                        ]);
-                    } else {
-                        \Log::warning("No valid email for reminder", [
-                            'id' => $appt->id,
-                            'type' => $type,
-                            'appointment_date' => $appt->appointment_date,
-                            'branch' => $userBranch
-                        ]);
-                    }
-                }
-            }
-        }
-    }
-
-    public function reminders(Request $request)
-    {
-        $today = now()->startOfDay();
-        $userBranch = Auth::guard('booking')->user()->hospital_branch;
-
-        $upcoming = $this->getUpcomingAppointments();
-        $missed = $this->getMissedAppointments($today);
-
-        $appointmentModels = [
-            'new' => NewAppointment::class,
-            'review' => ReviewAppointment::class,
-            'postop' => PostOpAppointment::class,
-            'external_approved' => ExternalApproved::class,
-        ];
-
-        // Update missed appointments to 'missed' status (only for user's branch)
-        foreach ($missed as $appt) {
-            if ($appt->appointment_status !== 'honoured') {
-                $appt->appointment_status = 'missed';
-                $appt->save();
-            }
-        }
-
-        $specializations = BkSpecializations::all();
-
-        // Calculate reminder count for cache (branch-specific)
-        $models = [
-            NewAppointment::class,
-            ReviewAppointment::class,
-            PostOpAppointment::class,
-            ExternalApproved::class,
-        ];
-
-        $upcomingCount = 0;
-        $missedCount = 0;
-
-        foreach ($models as $model) {
-            $query = $model::whereBetween('appointment_date', [$today, $today->copy()->addDays(7)->endOfDay()])
-                ->where('reminder_cleared', false)
-                ->when($userBranch, function ($q) use ($userBranch) {
-                    return $q->where('hospital_branch', $userBranch);
-                });
-
-            if ($model === ExternalApproved::class) {
-                $query->where('patient_notified', false);
-            }
-            $upcomingCount += $query->count();
-
-            $missedCount += $model::where('appointment_date', '<', $today)
-                ->whereNotIn('appointment_status', ['honoured', 'cancelled'])
-                ->where('reminder_cleared', false)
-                ->when($userBranch, function ($q) use ($userBranch) {
-                    return $q->where('hospital_branch', $userBranch);
-                })
-                ->count();
-        }
-
-        $reminderCount = $upcomingCount + $missedCount;
-
-        return view('booking.reminders', [
-            'title' => 'Appointment Reminders',
-            'upcoming' => $upcoming,
-            'missed' => $missed,
-            'specializations' => $specializations,
-            'reminderCount' => $reminderCount,
-            'userBranch' => $userBranch,
-        ]);
-    }
-    public function bulkClearReminders(Request $request)
-    {
-        $appointmentIds = $request->input('appointment_ids', []);
-        $userBranch = Auth::guard('booking')->user()->hospital_branch;
-
-        $appointmentModels = [
-            'new' => NewAppointment::class,
-            'review' => ReviewAppointment::class,
-            'postop' => PostOpAppointment::class,
-            'external_approved' => ExternalApproved::class,
-        ];
-
-        DB::beginTransaction();
-        try {
-            foreach ($appointmentIds as $appointmentId) {
-                [$id, $type] = explode('-', $appointmentId);
-                $model = $appointmentModels[$type] ?? null;
-                if ($model) {
-                    $appointment = $model::where('id', $id)
-                        ->when($userBranch, function ($q) use ($userBranch) {
-                            return $q->where('hospital_branch', $userBranch);
-                        })
-                        ->first();
-
-                    if ($appointment) {
-                        $appointment->reminder_cleared = true;
-                        $appointment->save();
-                    } else {
-                        Log::warning("Appointment not found or access denied for clearing", [
-                            'id' => $id,
-                            'type' => $type,
-                            'user_branch' => $userBranch
-                        ]);
-                    }
-                }
-            }
-            Cache::forget('reminder_count_' . $userBranch);
-            DB::commit();
-            return redirect()->route('booking.reminders')->with('success', 'Selected reminders cleared successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Failed to clear reminders: ' . $e->getMessage());
-            return redirect()->route('booking.reminders')->with('error', 'Failed to clear reminders.');
-        }
-    }
-
-    public function clearAppointment(Request $request, $id)
-    {
-        [$id, $type] = explode('-', $id);
-        $userBranch = Auth::guard('booking')->user()->hospital_branch;
-
-        $appointmentModels = [
-            'new' => NewAppointment::class,
-            'review' => ReviewAppointment::class,
-            'postop' => PostOpAppointment::class,
-            'external_approved' => ExternalApproved::class,
-        ];
-
-        $model = $appointmentModels[$type] ?? null;
-        if (!$model) {
-            return redirect()->route('booking.reminders')->with('error', 'Invalid appointment type.');
-        }
-
-        $appointment = $model::where('id', $id)
-            ->when($userBranch, function ($q) use ($userBranch) {
-                return $q->where('hospital_branch', $userBranch);
-            })
-            ->first();
-
-        if (!$appointment) {
-            return redirect()->route('booking.reminders')->with('error', 'Appointment not found or access denied.');
-        }
-
-        $appointment->reminder_cleared = true;
-        $appointment->save();
-        Cache::forget('reminder_count_' . $userBranch);
-
-        return redirect()->route('booking.reminders')->with('success', 'Reminder cleared successfully.');
-    }
-
     private function getMissedAppointments($today)
     {
         $userBranch = Auth::guard('booking')->user()->hospital_branch;
@@ -4468,7 +4236,7 @@ class BookingController extends Controller
 
     public function searchBookingPatients(Request $request)
     {
-        \Log::info("Patient search accessed", $request->all());
+        Log::info("Patient search accessed", $request->all());
 
         $request->validate([
             'search' => 'nullable|string|max:255',
@@ -4514,13 +4282,13 @@ class BookingController extends Controller
                     ->orWhere('bk_specializations.name', 'LIKE', $searchPattern);
             });
 
-            \Log::info("Search applied with term: {$search} for branch: {$userBranch}");
+            Log::info("Search applied with term: {$search} for branch: {$userBranch}");
 
             try {
                 $appointments = $query->orderBy('bk_appointments.appointment_date', 'desc')->get();
-                \Log::info("Patient search results fetched: " . $appointments->count() . " for branch: {$userBranch}");
+                Log::info("Patient search results fetched: " . $appointments->count() . " for branch: {$userBranch}");
             } catch (\Exception $e) {
-                \Log::error("Patient search query failed: " . $e->getMessage(), [
+                Log::error("Patient search query failed: " . $e->getMessage(), [
                     'sql' => $query->toSql(),
                     'bindings' => $query->getBindings(),
                     'user_branch' => $userBranch,
@@ -4533,7 +4301,7 @@ class BookingController extends Controller
         } else {
             // If no search term, return empty results
             $appointments = collect([]);
-            \Log::info("No search term provided, returning empty results");
+            Log::info("No search term provided, returning empty results");
         }
 
         // Handle AJAX request
@@ -4545,7 +4313,7 @@ class BookingController extends Controller
                 ])->render();
                 return response()->json(['table' => $tableView]);
             } catch (\Exception $e) {
-                \Log::error("AJAX rendering failed for patient search: " . $e->getMessage());
+                Log::error("AJAX rendering failed for patient search: " . $e->getMessage());
                 return response()->json(['error' => 'Error rendering search results.'], 500);
             }
         }
@@ -4626,7 +4394,7 @@ class BookingController extends Controller
         $isSuperadmin = ($user && $user->role === 'superadmin');
         $isAdmin = ($user && $user->role === 'admin');
 
-        \Log::info("User details:", [
+        Log::info("User details:", [
             'user_id' => $user->id,
             'user_branch' => $userBranch,
             'user_role' => $userRole
@@ -4640,7 +4408,7 @@ class BookingController extends Controller
             ->pluck('hospital_branch')
             ->toArray();
 
-        \Log::info("Actual branches found in bk_appointments table:", $actualBranches);
+        Log::info("Actual branches found in bk_appointments table:", $actualBranches);
 
         // Get total records per branch for debugging
         $branchCounts = DB::table('bk_appointments')
@@ -4650,7 +4418,7 @@ class BookingController extends Controller
             ->pluck('count', 'hospital_branch')
             ->toArray();
 
-        \Log::info("Records per branch:", $branchCounts);
+        Log::info("Records per branch:", $branchCounts);
 
         // Define branch mapping (URL-friendly to database values)
         $branchMapping = [
@@ -4661,35 +4429,35 @@ class BookingController extends Controller
         ];
 
         $urlBranch = strtolower($branch);
-        \Log::info("URL branch (lowercase): {$urlBranch}");
+        Log::info("URL branch (lowercase): {$urlBranch}");
 
         // Validate branch parameter
         if (!array_key_exists($urlBranch, $branchMapping)) {
-            \Log::warning("Invalid branch provided: {$branch}. Valid options: " . implode(', ', array_keys($branchMapping)));
+            Log::warning("Invalid branch provided: {$branch}. Valid options: " . implode(', ', array_keys($branchMapping)));
             return redirect()->route('booking.dashboard')
                 ->with('error', 'Invalid hospital branch. Available: ' . implode(', ', array_keys($branchMapping)));
         }
 
         $branchName = $branchMapping[$urlBranch];
-        \Log::info("Mapped database branch name: {$branchName}");
+        Log::info("Mapped database branch name: {$branchName}");
 
         // Check if this branch actually has data
         if (!in_array($branchName, $actualBranches)) {
-            \Log::warning("No data found for branch: {$branchName}. Available branches with data: " . implode(', ', $actualBranches));
+            Log::warning("No data found for branch: {$branchName}. Available branches with data: " . implode(', ', $actualBranches));
             // Continue anyway - might be a valid branch with no appointments yet
         }
 
         // Access control
         if ($userRole === 'superadmin') {
-            \Log::info("Admin access granted for branch: {$branchName}");
+            Log::info("Admin access granted for branch: {$branchName}");
         } else {
             // Non-admin users can only see their own branch
             if ($userBranch !== $branchName) {
-                \Log::warning("Access denied: User from {$userBranch} trying to access {$branchName}");
+                Log::warning("Access denied: User from {$userBranch} trying to access {$branchName}");
                 return redirect()->route('booking.dashboard')
                     ->with('error', 'Access denied. You can only view your branch data.');
             }
-            \Log::info("User access granted for own branch: {$branchName}");
+            Log::info("User access granted for own branch: {$branchName}");
         }
 
         try {
@@ -4726,23 +4494,23 @@ class BookingController extends Controller
                 ->orderBy('appointment_date', 'desc')
                 ->orderBy('appointment_time', 'asc');
 
-            \Log::info("SQL Query: " . $query->toSql());
-            \Log::info("Query Bindings: ", $query->getBindings());
+             Log::info("SQL Query: " . $query->toSql());
+             Log::info("Query Bindings: ", $query->getBindings());
 
             // Execute the query
             $appointments = $query->get();
 
-            \Log::info("Appointments fetched for branch {$branchName}: " . $appointments->count());
+             Log::info("Appointments fetched for branch {$branchName}: " . $appointments->count());
 
             // Debug the results
             if ($appointments->isNotEmpty()) {
                 // Log booking type distribution
                 $bookingTypes = $appointments->groupBy('booking_type')->map->count();
-                \Log::info("Booking type distribution:", $bookingTypes->toArray());
+                 Log::info("Booking type distribution:", $bookingTypes->toArray());
 
                 // Log appointment status distribution  
                 $statusDistribution = $appointments->groupBy('appointment_status')->map->count();
-                \Log::info("Appointment status distribution:", $statusDistribution->toArray());
+                 Log::info("Appointment status distribution:", $statusDistribution->toArray());
 
                 // Sample appointments for debugging
                 $sampleAppointments = $appointments->take(3)->map(function ($apt) {
@@ -4756,23 +4524,23 @@ class BookingController extends Controller
                         'appointment_status' => $apt->appointment_status
                     ];
                 });
-                \Log::info("Sample appointments:", $sampleAppointments->toArray());
+                Log::info("Sample appointments:", $sampleAppointments->toArray());
             } else {
-                \Log::warning("No appointments found for branch: {$branchName}");
+                Log::warning("No appointments found for branch: {$branchName}");
 
                 // Check if any appointments exist at all
                 $totalAppointments = DB::table('bk_appointments')->count();
-                \Log::info("Total appointments in database: {$totalAppointments}");
+                Log::info("Total appointments in database: {$totalAppointments}");
 
                 if ($totalAppointments > 0) {
-                    \Log::info("Appointments exist but none for branch: {$branchName}");
-                    \Log::info("This might be normal if this branch has no appointments yet.");
+                    Log::info("Appointments exist but none for branch: {$branchName}");
+                    Log::info("This might be normal if this branch has no appointments yet.");
                 } else {
-                    \Log::warning("No appointments found in entire bk_appointments table!");
+                    Log::warning("No appointments found in entire bk_appointments table!");
                 }
             }
         } catch (\Exception $e) {
-            \Log::error("Query failed for branch {$branchName}: " . $e->getMessage(), [
+            Log::error("Query failed for branch {$branchName}: " . $e->getMessage(), [
                 'user_branch' => $userBranch,
                 'sql' => $query->toSql(),
                 'bindings' => $query->getBindings(),
@@ -4867,9 +4635,9 @@ class BookingController extends Controller
         try {
             // Try to get from bk_specialization table first
             $specializations = DB::table('bk_specialization')->get();
-            \Log::info("Fetched specializations from bk_specialization table: " . $specializations->count());
+            Log::info("Fetched specializations from bk_specialization table: " . $specializations->count());
         } catch (\Exception $e) {
-            \Log::warning("Could not fetch specializations from bk_specialization table: " . $e->getMessage());
+            Log::warning("Could not fetch specializations from bk_specialization table: " . $e->getMessage());
 
             // Fallback: Get unique specializations from appointments
             $rawSpecializations = DB::table('bk_appointments')
@@ -4883,7 +4651,7 @@ class BookingController extends Controller
                 return (object) ['name' => $item->specialization];
             });
 
-            \Log::info("Fetched specializations from bk_appointments table: " . $specializations->count());
+            Log::info("Fetched specializations from bk_appointments table: " . $specializations->count());
         }
 
         // Ensure we always have a collection of objects with 'name' property
@@ -4911,8 +4679,8 @@ class BookingController extends Controller
             'branchCounts' => $branchCounts ?? [],
         ];
 
-        \Log::info("=== BRANCH DASHBOARD DEBUG END ===");
-        \Log::info("Final data being passed to view:", [
+        Log::info("=== BRANCH DASHBOARD DEBUG END ===");
+        Log::info("Final data being passed to view:", [
             'title' => $data['title'],
             'appointments_count' => $appointments->count(),
             'branch' => $data['branch'],
@@ -4932,13 +4700,13 @@ class BookingController extends Controller
             $result = DB::select("SHOW COLUMNS FROM bk_appointments WHERE Field = 'hospital_branch'");
 
             if (empty($result)) {
-                \Log::warning('Could not fetch hospital_branch enum values from bk_appointments table');
+                Log::warning('Could not fetch hospital_branch enum values from bk_appointments table');
                 return ['kijabe', 'naivasha', 'westlands', 'marira'];
             }
 
             preg_match("/^enum\((.*)\)$/", $result[0]->Type, $matches);
             if (empty($matches[1])) {
-                \Log::warning('Invalid enum format for hospital_branch', ['type' => $result[0]->Type]);
+                Log::warning('Invalid enum format for hospital_branch', ['type' => $result[0]->Type]);
                 return ['kijabe', 'naivasha', 'westlands', 'marira'];
             }
 
@@ -4947,11 +4715,243 @@ class BookingController extends Controller
                 explode(',', $matches[1])
             );
 
-            \Log::info('Fetched hospital_branch enum values from bk_appointments:', ['values' => $enumValues]);
+            Log::info('Fetched hospital_branch enum values from bk_appointments:', ['values' => $enumValues]);
             return $enumValues;
         } catch (\Exception $e) {
-            \Log::error('Error fetching enum values: ' . $e->getMessage());
+            Log::error('Error fetching enum values: ' . $e->getMessage());
             return ['kijabe', 'naivasha', 'westlands', 'marira'];
         }
     }
+
+    // protected function sendAppointmentReminders()
+    // {
+    //     $today = now()->startOfDay();
+    //     $twoDaysAhead = $today->copy()->addDays(2)->startOfDay();
+    //     $oneWeekAhead = $today->copy()->addDays(7)->startOfDay();
+    //     $oneWeekAgo = $today->copy()->subWeek()->startOfDay();
+
+    //     // Get current user's branch
+    //     $userBranch = Auth::guard('booking')->user()->hospital_branch;
+
+    //     $queries = [
+    //         'new' => NewAppointment::class,
+    //         'review' => ReviewAppointment::class,
+    //         'postop' => PostOpAppointment::class,
+    //         'external_approved' => ExternalApproved::class,
+    //     ];
+
+    //     foreach ($queries as $type => $model) {
+    //         // Query for appointments on the exact day
+    //         $queryToday = $model::whereDate('appointment_date', $today)
+    //             ->where('appointment_status', 'approved')
+    //             ->where('reminder_cleared', false)
+    //             ->when($userBranch, function ($q) use ($userBranch) {
+    //                 return $q->where('hospital_branch', $userBranch);
+    //             });
+
+    //         // Query for two days ahead (for bookings made at least a week ago)
+    //         $queryTwoDays = $model::whereDate('appointment_date', $twoDaysAhead)
+    //             ->whereDate('created_at', '<=', $oneWeekAgo)
+    //             ->where('appointment_status', 'approved')
+    //             ->where('reminder_cleared', false)
+    //             ->when($userBranch, function ($q) use ($userBranch) {
+    //                 return $q->where('hospital_branch', $userBranch);
+    //             });
+
+    //         // Query for one week ahead
+    //         $queryOneWeek = $model::whereDate('appointment_date', $oneWeekAhead)
+    //             ->where('appointment_status', 'approved')
+    //             ->where('reminder_cleared', false)
+    //             ->when($userBranch, function ($q) use ($userBranch) {
+    //                 return $q->where('hospital_branch', $userBranch);
+    //             });
+
+    //         // Apply patient_notified filter only for ExternalApproved
+    //         if ($type === 'external_approved') {
+    //             $appointmentsToday = $queryToday->where('patient_notified', false)->get();
+    //             $appointmentsTwoDays = $queryTwoDays->where('patient_notified', false)->get();
+    //             $appointmentsOneWeek = $queryOneWeek->where('patient_notified', false)->get();
+    //         } else {
+    //             $appointmentsToday = $queryToday->get();
+    //             $appointmentsTwoDays = $queryTwoDays->get();
+    //             $appointmentsOneWeek = $queryOneWeek->get();
+    //         }
+
+    //         // Send reminders for all applicable appointments
+    //         foreach ([$appointmentsToday, $appointmentsTwoDays, $appointmentsOneWeek] as $appointments) {
+    //             foreach ($appointments as $appt) {
+    //                 if ($appt->email && $appt->email !== 'N/A') {
+    //                     Mail::to($appt->email)->send(new AppointmentReminder($appt));
+    //                     if ($type === 'external_approved') {
+    //                         $appt->patient_notified = true;
+    //                         $appt->save();
+    //                     }
+    //                     \Log::info("Reminder sent", [
+    //                         'id' => $appt->id,
+    //                         'type' => $type,
+    //                         'appointment_date' => $appt->appointment_date,
+    //                         'email' => $appt->email,
+    //                         'branch' => $userBranch
+    //                     ]);
+    //                 } else {
+    //                     \Log::warning("No valid email for reminder", [
+    //                         'id' => $appt->id,
+    //                         'type' => $type,
+    //                         'appointment_date' => $appt->appointment_date,
+    //                         'branch' => $userBranch
+    //                     ]);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // public function reminders(Request $request)
+    // {
+    //     $today = now()->startOfDay();
+    //     $userBranch = Auth::guard('booking')->user()->hospital_branch;
+
+    //     $upcoming = $this->getUpcomingAppointments();
+    //     $missed = $this->getMissedAppointments($today);
+
+    //     $appointmentModels = [
+    //         'new' => NewAppointment::class,
+    //         'review' => ReviewAppointment::class,
+    //         'postop' => PostOpAppointment::class,
+    //         'external_approved' => ExternalApproved::class,
+    //     ];
+
+    //     // Update missed appointments to 'missed' status (only for user's branch)
+    //     foreach ($missed as $appt) {
+    //         if ($appt->appointment_status !== 'honoured') {
+    //             $appt->appointment_status = 'missed';
+    //             $appt->save();
+    //         }
+    //     }
+
+    //     $specializations = BkSpecializations::all();
+
+    //     // Calculate reminder count for cache (branch-specific)
+    //     $models = [
+    //         NewAppointment::class,
+    //         ReviewAppointment::class,
+    //         PostOpAppointment::class,
+    //         ExternalApproved::class,
+    //     ];
+
+    //     $upcomingCount = 0;
+    //     $missedCount = 0;
+
+    //     foreach ($models as $model) {
+    //         $query = $model::whereBetween('appointment_date', [$today, $today->copy()->addDays(7)->endOfDay()])
+    //             ->where('reminder_cleared', false)
+    //             ->when($userBranch, function ($q) use ($userBranch) {
+    //                 return $q->where('hospital_branch', $userBranch);
+    //             });
+
+    //         if ($model === ExternalApproved::class) {
+    //             $query->where('patient_notified', false);
+    //         }
+    //         $upcomingCount += $query->count();
+
+    //         $missedCount += $model::where('appointment_date', '<', $today)
+    //             ->whereNotIn('appointment_status', ['honoured', 'cancelled'])
+    //             ->where('reminder_cleared', false)
+    //             ->when($userBranch, function ($q) use ($userBranch) {
+    //                 return $q->where('hospital_branch', $userBranch);
+    //             })
+    //             ->count();
+    //     }
+
+    //     $reminderCount = $upcomingCount + $missedCount;
+
+    //     return view('booking.reminders', [
+    //         'title' => 'Appointment Reminders',
+    //         'upcoming' => $upcoming,
+    //         'missed' => $missed,
+    //         'specializations' => $specializations,
+    //         'reminderCount' => $reminderCount,
+    //         'userBranch' => $userBranch,
+    //     ]);
+    // }
+    // public function bulkClearReminders(Request $request)
+    // {
+    //     $appointmentIds = $request->input('appointment_ids', []);
+    //     $userBranch = Auth::guard('booking')->user()->hospital_branch;
+
+    //     $appointmentModels = [
+    //         'new' => NewAppointment::class,
+    //         'review' => ReviewAppointment::class,
+    //         'postop' => PostOpAppointment::class,
+    //         'external_approved' => ExternalApproved::class,
+    //     ];
+
+    //     DB::beginTransaction();
+    //     try {
+    //         foreach ($appointmentIds as $appointmentId) {
+    //             [$id, $type] = explode('-', $appointmentId);
+    //             $model = $appointmentModels[$type] ?? null;
+    //             if ($model) {
+    //                 $appointment = $model::where('id', $id)
+    //                     ->when($userBranch, function ($q) use ($userBranch) {
+    //                         return $q->where('hospital_branch', $userBranch);
+    //                     })
+    //                     ->first();
+
+    //                 if ($appointment) {
+    //                     $appointment->reminder_cleared = true;
+    //                     $appointment->save();
+    //                 } else {
+    //                     Log::warning("Appointment not found or access denied for clearing", [
+    //                         'id' => $id,
+    //                         'type' => $type,
+    //                         'user_branch' => $userBranch
+    //                     ]);
+    //                 }
+    //             }
+    //         }
+    //         Cache::forget('reminder_count_' . $userBranch);
+    //         DB::commit();
+    //         return redirect()->route('booking.reminders')->with('success', 'Selected reminders cleared successfully.');
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Log::error('Failed to clear reminders: ' . $e->getMessage());
+    //         return redirect()->route('booking.reminders')->with('error', 'Failed to clear reminders.');
+    //     }
+    // }
+
+    // public function clearAppointment(Request $request, $id)
+    // {
+    //     [$id, $type] = explode('-', $id);
+    //     $userBranch = Auth::guard('booking')->user()->hospital_branch;
+
+    //     $appointmentModels = [
+    //         'new' => NewAppointment::class,
+    //         'review' => ReviewAppointment::class,
+    //         'postop' => PostOpAppointment::class,
+    //         'external_approved' => ExternalApproved::class,
+    //     ];
+
+    //     $model = $appointmentModels[$type] ?? null;
+    //     if (!$model) {
+    //         return redirect()->route('booking.reminders')->with('error', 'Invalid appointment type.');
+    //     }
+
+    //     $appointment = $model::where('id', $id)
+    //         ->when($userBranch, function ($q) use ($userBranch) {
+    //             return $q->where('hospital_branch', $userBranch);
+    //         })
+    //         ->first();
+
+    //     if (!$appointment) {
+    //         return redirect()->route('booking.reminders')->with('error', 'Appointment not found or access denied.');
+    //     }
+
+    //     $appointment->reminder_cleared = true;
+    //     $appointment->save();
+    //     Cache::forget('reminder_count_' . $userBranch);
+
+    //     return redirect()->route('booking.reminders')->with('success', 'Reminder cleared successfully.');
+    // }
+
 }
