@@ -62,9 +62,9 @@
                         <i class="fas fa-cog me-1"></i> Actions
                     </button>
                     <ul class="custom-dropdown-menu" id="actionDropdownMenu">
-                        <li><a class="custom-dropdown-item" href="#" id="mark-came">Mark selected as came</a></li>
-                        <li><a class="custom-dropdown-item" href="#" id="mark-missed">Mark selected as missed</a></li>
-                        <li><a class="custom-dropdown-item" href="#" id="send-reminders">Send Reminders</a></li>
+                        <li><a class="custom-dropdown-item" href="#" id="mark-came">• Mark selected as came</a></li>
+                        <li><a class="custom-dropdown-item" href="#" id="mark-missed">• Mark selected as missed</a></li>
+                        <li><a class="custom-dropdown-item" href="#" id="send-reminders">• Send Reminders</a></li>
                     </ul>
                 </div>
             </div>

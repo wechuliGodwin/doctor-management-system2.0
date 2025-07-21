@@ -619,9 +619,6 @@
     <div id="react-alert-root" data-alerts-count="{{ $alertsCount }}" data-alerts-route="{{ route('booking.alerts') }}">
     </div>
 
-
-
-
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">DMS</div>
