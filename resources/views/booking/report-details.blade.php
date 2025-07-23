@@ -321,7 +321,7 @@
                         Status
                     </label>
                     <select id="status" name="status">
-                        <option value="all" {{ $status === 'all' ? 'selected' : '' }}>All Appointments</option>
+                        <option value="all" {{ $status === 'all' ? 'selected' : '' }}>All Appointment Statuses</option>
                         <option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Confirmed (Pending)</option>
                         <option value="patients_seen" {{ $status === 'patients_seen' ? 'selected' : '' }}>Patients Seen</option>
                         <option value="missed" {{ $status === 'missed' ? 'selected' : '' }}>Missed</option>
@@ -357,7 +357,7 @@
                         Doctor
                     </label>
                     <select id="doctor" name="doctor">
-                        <option value="">All Doctors</option>
+                        <option value="">All Availble Doctors</option>
                         @foreach ($doctors as $doctor)
                         <option value="{{ $doctor->id }}" {{ $selectedDoctor == $doctor->id ? 'selected' : '' }}>{{ $doctor->display_name }}</option>
                         @endforeach
@@ -372,12 +372,12 @@
                         Booking Type
                     </label>
                     <select id="bookingType" name="booking_type">
-                        <option value="">All Types</option>
-                        <option value="new" {{ $bookingType === 'new' ? 'selected' : '' }}>New Patient</option>
-                        <option value="review" {{ $bookingType === 'review' ? 'selected' : '' }}>Review</option>
-                        <option value="post_op" {{ $bookingType === 'post_op' ? 'selected' : '' }}>Post-Op</option>
+                        <option value="">All Booking Types</option>
+                        <option value="new" {{ $bookingType === 'new' ? 'selected' : '' }}>New Patients</option>
+                        <option value="review" {{ $bookingType === 'review' ? 'selected' : '' }}>Review Patients</option>
+                        <option value="post_op" {{ $bookingType === 'post_op' ? 'selected' : '' }}>Post-Op Patients</option>
                         @if ($isSuperadmin || Auth::guard('booking')->user()->hospital_branch === 'kijabe')
-                        <option value="external_approved" {{ $bookingType === 'external_approved' ? 'selected' : '' }}>External Approved</option>
+                        <option value="external_approved" {{ $bookingType === 'external_approved' ? 'selected' : '' }}>External Approved </option>
                         <option value="external_pending" {{ $bookingType === 'external_pending' ? 'selected' : '' }}>Pending External</option>
                         @endif
                     </select>
@@ -649,6 +649,7 @@
                         <th>Doctor</th>
                         <th>Type</th>
                         <th>Status</th>
+                        <th>HMIS Visit Status</th>
                         <th>Tracing Status</th>
                         <th>Tracing Message</th>
                         <th>Tracing Date</th>
@@ -684,6 +685,7 @@
                         <td>{{ data_get($appointment, 'doctor', '-') }}</td>
                         <td>{{ data_get($appointment, 'booking_type', '-') }}</td>
                         <td>{{ data_get($appointment, 'appointment_status', '-') }}</td>
+                        <td>{{ data_get($appointment, 'hmis_visit_status', '-') }}</td>
                         <td>{{ data_get($appointment, 'tracing_status', '-') }}</td>
                         <td>{{ data_get($appointment, 'tracing_message', '-') }}</td>
                         <td>{{ data_get($appointment, 'tracing_date', '-') }}</td>

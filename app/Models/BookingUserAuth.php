@@ -18,6 +18,7 @@ class BookingUserAuth extends Authenticatable
         'password',
         'role',
         'hospital_branch',
+        'switchable_branches',
         'is_active',
     ];
 
@@ -29,6 +30,7 @@ class BookingUserAuth extends Authenticatable
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'hospital_branch' => 'string',
+        'switchable_branches' => 'array',
     ];
 
     public function sendPasswordResetNotification($token)

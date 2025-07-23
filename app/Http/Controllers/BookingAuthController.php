@@ -129,11 +129,14 @@ class BookingAuthController extends Controller
             ],
             'role' => ['required', 'in:' . implode(',', $this->getUserRolesEnumValues())],
             'hospital_branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+            'switchable_branches' => ['nullable', 'array'],
+            'switchable_branches.*' => ['in:' . implode(',', $this->getHospitalBranchEnumValues())],
         ]);
 
         // Admins can only create users for their own hospital branch
         if ($currentUser->role === 'admin') {
             $validated['hospital_branch'] = $currentUser->hospital_branch;
+            $validated['switchable_branches'] = [$currentUser->hospital_branch];
         }
 
         $user = BookingUserAuth::create([
@@ -142,6 +145,7 @@ class BookingAuthController extends Controller
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
             'hospital_branch' => $validated['hospital_branch'],
+            'switchable_branches' => $validated['switchable_branches'] ?? [$validated['hospital_branch']],
             'is_active' => true,
         ]);
 
@@ -149,6 +153,7 @@ class BookingAuthController extends Controller
             'created_user_id' => $user->id,
             'created_by' => $currentUser->id,
             'email' => $user->email,
+            'switchable_branches' => $user->switchable_branches,
         ]);
 
         return redirect()->route('booking.auth.users.index')->with('success', 'User created successfully.');
@@ -173,6 +178,7 @@ class BookingAuthController extends Controller
         return view('booking.auth.users.edit', compact('user', 'hospital_branches', 'roles', 'currentUser'));
     }
 
+
     /**
      * Update user details
      */
@@ -191,12 +197,20 @@ class BookingAuthController extends Controller
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('booking_user_auth')->ignore($user->id)],
             'role' => ['required', 'in:' . implode(',', $this->getUserRolesEnumValues())],
             'hospital_branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+            'switchable_branches' => ['nullable', 'array'],
+            'switchable_branches.*' => ['in:' . implode(',', $this->getHospitalBranchEnumValues())],
             'is_active' => ['boolean'],
         ]);
 
-        // Admins cannot change hospital branch
+        // Admins cannot change hospital branch or switchable branches
         if ($currentUser->role === 'admin') {
             unset($validated['hospital_branch']);
+            unset($validated['switchable_branches']);
+        } else {
+            // Ensure hospital_branch is included in switchable_branches
+            if (!empty($validated['switchable_branches']) && !in_array($validated['hospital_branch'], $validated['switchable_branches'])) {
+                $validated['switchable_branches'][] = $validated['hospital_branch'];
+            }
         }
 
         $user->update($validated);
@@ -204,14 +218,39 @@ class BookingAuthController extends Controller
         Log::info('User updated', [
             'updated_user_id' => $user->id,
             'updated_by' => $currentUser->id,
+            'switchable_branches' => $user->switchable_branches,
         ]);
 
         return redirect()->route('booking.auth.users.index')->with('success', 'User updated successfully.');
     }
 
-    /**
-     * Show change password form
-     */
+
+    // Switch user's hospital branch
+    public function switchBranch(Request $request)
+    {
+        $user = Auth::guard('booking')->user();
+        $validated = $request->validate([
+            'branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+        ]);
+
+        // Check if the user is allowed to switch to the selected branch
+        if (!in_array($validated['branch'], $user->switchable_branches ?? [])) {
+            return back()->withErrors(['branch' => 'You are not authorized to switch to this branch.']);
+        }
+
+        // Update the user's hospital_branch
+        $user->update(['hospital_branch' => $validated['branch']]);
+
+        // Store the selected branch in session for data filtering
+        session(['selected_branch' => $validated['branch']]);
+
+        Log::info('User switched branch', [
+            'user_id' => $user->id,
+            'new_branch' => $validated['branch'],
+        ]);
+
+        return redirect()->back()->with('success', 'Branch switched successfully.');
+    }
     public function showChangePasswordForm($id)
     {
         $currentUser = Auth::guard('booking')->user();

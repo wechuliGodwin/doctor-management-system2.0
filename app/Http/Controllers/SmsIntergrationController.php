@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use GuzzleHttp\Client;
 use App\Models\BkAppointments;
 use App\Models\BkNotifications;
+use App\Models\BkNotificationTemplates;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -87,11 +88,18 @@ class SmsIntergrationController extends Controller
 
         return response()->json(['data' => $appointments]);
     }
+    private function isValidPhoneNumber($phone)
+    {
+        // Remove whitespace and non-numeric characters except +
+        $phone = preg_replace('/[^0-9+]/', '', trim($phone));        
+        // Check for Kenyan mobile number format: 07xxxxxxxx or +254xxxxxxxx
+        return (preg_match('/^07[0-9]{8}$/', $phone) || preg_match('/^\+254[0-9]{9}$/', $phone));
+    }
     public function sendBulkSMS(Request $request)
     {
         $request->validate([
             'recipients' => 'required|array|min:1',
-            'message' => 'required|string|max:160'
+            'message' => 'required|string|max:1000'
         ]);
 
         $client = new Client();
@@ -99,94 +107,150 @@ class SmsIntergrationController extends Controller
         $successCount = 0;
         $failedCount = 0;
 
-        // Define success status codes
-        $successCodes = ['1', '1000'];
+        $statusCodeMap = [
+            '0' => ['status' => 'failed', 'description' => 'Unknown error'],
+            '1' => ['status' => 'sent', 'description' => 'Success'],
+            '1000' => ['status' => 'sent', 'description' => 'Success'],
+            '1001' => ['status' => 'inv_sender', 'description' => 'Invalid sender name'],
+            '1002' => ['status' => 'failed', 'description' => 'Network not allowed'],
+            '1003' => ['status' => 'inv_mobile', 'description' => 'Invalid mobile number'],
+            '1004' => ['status' => 'failed', 'description' => 'Low bulk credits'],
+            '1005' => ['status' => 'failed', 'description' => 'Failed. System error'],
+            '1006' => ['status' => 'failed', 'description' => 'Invalid credentials'],
+            '1007' => ['status' => 'failed', 'description' => 'Database connection failed'],
+            '1008' => ['status' => 'failed', 'description' => 'Database selection failed'],
+            '1009' => ['status' => 'failed', 'description' => 'No dlr or unsupported data type'],
+            '1010' => ['status' => 'failed', 'description' => 'Unsupported request type'],
+            '1011' => ['status' => 'failed', 'description' => 'Invalid user state']
+        ];
 
         foreach ($request->recipients as $recipient) {
-            try {
-                $personalizedMessage = str_replace(
-                    ['{name}', '{specialization}', '{date}', '{time}'],
-                    [$recipient['full_name'], $recipient['specialization'], $recipient['appointment_date'], $recipient['appointment_time']],
-                    $request->message
-                );
+            $personalizedMessage = str_replace(
+                ['{name}', '{specialization}', '{date}', '{time}'],
+                [$recipient['full_name'], $recipient['specialization'], $recipient['appointment_date'], $recipient['appointment_time']],
+                $request->message
+            );
 
-                $response = $client->post('https://sms.digitalleo.co.ke/sms/v3/sendsms', [
-                    'verify' => false,
-                    'headers' => [
-                        'Content-Type' => 'application/json',
-                    ],
-                    'json' => [
-                        'api_key' => env('DIGITAL_LEO_API_KEY'),
-                        'service_id' => env('DIGITAL_LEO_SERVICE_ID'),
-                        'mobile' => $recipient['phone'],
-                        'response_type' => 'json',
-                        'shortcode' => env('DIGITAL_LEO_SENDER_ID'),
-                        'message' => $personalizedMessage
-                    ]
-                ]);
+            // Split phone numbers by '|'
+            $phoneNumbers = array_map('trim', explode('|', $recipient['phone']));
+            $attemptedPhone = null;
+            $statusCode = '1003';
+            $statusDesc = 'Invalid mobile number';
+            $statusInfo = $statusCodeMap['1003'];
+            $messageId = null;
+            $success = false;
 
-                $result = json_decode($response->getBody(), true)[0];
-
-                $notification = BkNotifications::create([
-                    'appointment_id' => $recipient['id'],
-                    'message_id' => $result['messageId'] ?? null,
-                    'notification_date' => now()->toDateString(),
-                    'appointment_time' => now()->toTimeString(),
-                    'hospital_branch' => Auth::guard('booking')->user()->hospital_branch ?? 'kijabe',
-                    'status' => in_array($result['status_code'], $successCodes) ? 'sent' : 'failed',
-                    'message' => $personalizedMessage,
-                    'status_code' => $result['status_code'],
-                    'status_desc' => $result['status_desc']
-                ]);
-
-                $results[] = [
-                    'appointment_id' => $recipient['id'],
-                    'appointment_number' => $recipient['appointment_number'],
-                    'specialization' => $recipient['specialization'],
-                    'appointment_date' => $recipient['appointment_date'],
-                    'message' => $personalizedMessage,
-                    'message_id' => $result['messageId'] ?? null,
-                    'status_code' => $result['status_code'],
-                    'status_desc' => $result['status_desc'],
-                    'sent_at' => now()->toDateTimeString()
-                ];
-
-                if (in_array($result['status_code'], $successCodes)) {
-                    $successCount++;
-                } else {
-                    $failedCount++;
+            // Try each phone number until one succeeds or all fail
+            foreach ($phoneNumbers as $phone) {
+                if (empty($phone)) {
+                    continue; // Skip empty numbers
                 }
-            } catch (\Exception $e) {
-                Log::error('SMS sending failed for recipient ' . $recipient['id'] . ': ' . $e->getMessage());
-                $failedCount++;
 
-                $notification = BkNotifications::create([
-                    'appointment_id' => $recipient['id'],
-                    'message_id' => null,
-                    'notification_date' => now()->toDateString(),
-                    'appointment_time' => now()->toTimeString(),
-                    'hospital_branch' => Auth::guard('booking')->user()->hospital_branch ?? 'kijabe',
-                    'status' => 'failed',
-                    'message' => $personalizedMessage,
-                    'status_code' => '1003',
-                    'status_desc' => $e->getMessage()
-                ]);
+                if (!$this->isValidPhoneNumber($phone)) {
+                    continue; // Skip invalid numbers
+                }
 
-                $results[] = [
-                    'appointment_id' => $recipient['id'],
-                    'appointment_number' => $recipient['appointment_number'],
-                    'specialization' => $recipient['specialization'],
-                    'appointment_date' => $recipient['appointment_date'],
-                    'message' => $personalizedMessage,
-                    'message_id' => null,
-                    'status_code' => '1003',
-                    'status_desc' => $e->getMessage(),
-                    'sent_at' => now()->toDateTimeString()
-                ];
+                try {
+                    $response = $client->post('https://sms.digitalleo.co.ke/sms/v3/sendsms', [
+                        'verify' => false,
+                        'headers' => [
+                            'Content-Type' => 'application/json',
+                        ],
+                        'json' => [
+                            'api_key' => env('DIGITAL_LEO_API_KEY'),
+                            'service_id' => env('DIGITAL_LEO_SERVICE_ID'),
+                            'mobile' => $phone,
+                            'response_type' => 'json',
+                            'shortcode' => env('DIGITAL_LEO_SENDER_ID'),
+                            'message' => $personalizedMessage
+                        ]
+                    ]);
+
+                    $result = json_decode($response->getBody(), true)[0];
+                    $statusCode = (string) $result['status_code'];
+                    $statusInfo = $statusCodeMap[$statusCode] ?? ['status' => 'failed', 'description' => 'Unknown status code'];
+                    $messageId = $result['messageId'] ?? null;
+                    $statusDesc = $result['status_desc'] ?? $statusInfo['description'];
+                    $attemptedPhone = $phone;
+
+                    if ($statusInfo['status'] === 'sent') {
+                        $success = true;
+                        $successCount++;
+                        break; // Stop on success
+                    } elseif ($statusCode === '1003') {
+                        continue; // Try next number for invalid mobile
+                    } else {
+                        $failedCount++;
+                        break; // Stop on other errors (e.g., 1001, 1004)
+                    }
+                } catch (\Exception $e) {
+                    Log::error('SMS sending failed for recipient ' . $recipient['id'] . ', phone ' . $phone . ': ' . $e->getMessage());
+                    $errorMessage = $e->getMessage();
+
+                    if (stripos($errorMessage, 'invalid mobile') !== false) {
+                        $statusCode = '1003';
+                        $statusDesc = 'Invalid mobile number';
+                        continue; // Try next number
+                    } elseif (stripos($errorMessage, 'authentication') !== false || stripos($errorMessage, 'credential') !== false) {
+                        $statusCode = '1006';
+                        $statusDesc = 'Invalid credentials';
+                    } elseif (stripos($errorMessage, 'database') !== false) {
+                        $statusCode = '1007';
+                        $statusDesc = 'Database connection failed';
+                    } else {
+                        $statusCode = '1005';
+                        $statusDesc = 'Failed. System error';
+                    }
+
+                    $statusInfo = $statusCodeMap[$statusCode] ?? ['status' => 'failed', 'description' => $statusDesc];
+                    $attemptedPhone = $phone;
+                    $failedCount++;
+                    break; // Stop on non-1003 errors
+                }
             }
+
+            // If no valid phone number or all attempts failed
+            if (!$attemptedPhone) {
+                $statusCode = '1003';
+                $statusDesc = 'No valid phone number provided';
+                $statusInfo = $statusCodeMap['1003'];
+                $failedCount++;
+            } elseif (!$success) {
+                $failedCount = $successCount > 0 ? $failedCount : $failedCount + 1; // Adjust count if no success
+            }
+
+            $notification = BkNotifications::create([
+                'appointment_id' => $recipient['id'],
+                'message_id' => $messageId,
+                'notification_date' => now()->toDateString(),
+                'appointment_time' => now()->toTimeString(),
+                'hospital_branch' => Auth::guard('booking')->user()->hospital_branch ?? 'kijabe',
+                'status' => $statusInfo['status'],
+                'message' => $personalizedMessage,
+                'phone_used' => $attemptedPhone,
+                'status_code' => $statusCode,
+                'status_desc' => $statusDesc
+            ]);
+
+            $results[] = [
+                'appointment_id' => $recipient['id'],
+                'appointment_number' => $recipient['appointment_number'],
+                'specialization' => $recipient['specialization'],
+                'appointment_date' => $recipient['appointment_date'],
+                'message' => $personalizedMessage,
+                'phone_used' => $attemptedPhone,
+                'message_id' => $messageId,
+                'status_code' => $statusCode,
+                'status_desc' => $statusDesc,
+                'sent_at' => now()->toDateTimeString()
+            ];
         }
 
-        Log::info('SMS send results', ['success_count' => $successCount, 'failed_count' => $failedCount, 'results' => $results]);
+        Log::info('SMS send results', [
+            'success_count' => $successCount,
+            'failed_count' => $failedCount,
+            'results' => $results
+        ]);
 
         return response()->json([
             'success' => $successCount > 0,
@@ -199,7 +263,6 @@ class SmsIntergrationController extends Controller
     public function getDeliveryLog(Request $request)
     {
         try {
-            // Fetch notifications
             $logs = BkNotifications::where('bk_notifications.hospital_branch', Auth::guard('booking')->user()->hospital_branch)
                 ->join('bk_appointments', 'bk_notifications.appointment_id', '=', 'bk_appointments.id')
                 ->select(
@@ -213,9 +276,9 @@ class SmsIntergrationController extends Controller
                 ->take(50)
                 ->get();
 
-            // Fetch delivery reports for messages with status_code 1 or 1000 and no delivery_status
             $client = new Client();
             $successCodes = ['1', '1000'];
+
             foreach ($logs as $log) {
                 if (in_array($log->status_code, $successCodes) && is_null($log->delivery_status) && $log->message_id) {
                     try {
@@ -243,18 +306,38 @@ class SmsIntergrationController extends Controller
                 }
             }
 
-            // Map logs to response format
-            $mappedLogs = $logs->map(function ($log) {
+            $statusCodeMap = [
+                '0' => ['status' => 'failed', 'description' => 'Unknown error'],
+                '1' => ['status' => 'sent', 'description' => 'Success'],
+                '1000' => ['status' => 'sent', 'description' => 'Success'],
+                '1001' => ['status' => 'inv_sender', 'description' => 'Invalid sender name'],
+                '1002' => ['status' => 'failed', 'description' => 'Network not allowed'],
+                '1003' => ['status' => 'inv_mobile', 'description' => 'Invalid mobile number'],
+                '1004' => ['status' => 'failed', 'description' => 'Low bulk credits'],
+                '1005' => ['status' => 'failed', 'description' => 'Failed. System error'],
+                '1006' => ['status' => 'failed', 'description' => 'Invalid credentials'],
+                '1007' => ['status' => 'failed', 'description' => 'Database connection failed'],
+                '1008' => ['status' => 'failed', 'description' => 'Database selection failed'],
+                '1009' => ['status' => 'failed', 'description' => 'No dlr or unsupported data type'],
+                '1010' => ['status' => 'failed', 'description' => 'Unsupported request type'],
+                '1011' => ['status' => 'failed', 'description' => 'Invalid user state']
+            ];
+
+            $mappedLogs = $logs->map(function ($log) use ($statusCodeMap) {
+                $statusCode = (string) $log->status_code;
+                $statusInfo = $statusCodeMap[$statusCode] ?? ['status' => 'failed', 'description' => 'Unknown status code'];
+
                 return [
                     'appointment_id' => $log->appointment_id,
                     'appointment_number' => $log->appointment->appointment_number,
-                    'specialization' => $log->appointment->specialization->name ?? '-',
+                    'specialization_name' => $log->appointment->specialization->name ?? '-',
                     'appointment_date' => Carbon::parse($log->appointment->appointment_date)->format('Y-m-d'),
                     'message' => $log->message,
+                    'phone_used' => $log->phone_used ?? '-',
                     'message_id' => $log->message_id,
-                    'status' => $log->status,
+                    'status' => $log->status ?? $statusInfo['status'],
                     'status_code' => $log->status_code,
-                    'status_desc' => $log->status_desc,
+                    'status_desc' => $log->status_desc ?? $statusInfo['description'],
                     'delivery_status' => $log->delivery_status ?? '-',
                     'delivery_desc' => $log->delivery_desc ?? '-',
                     'delivery_time' => $log->delivery_time ? Carbon::parse($log->delivery_time)->toDateTimeString() : '-',
@@ -269,41 +352,97 @@ class SmsIntergrationController extends Controller
             return response()->json(['error' => 'Failed to fetch delivery log'], 500);
         }
     }
-
     public function getTemplates(Request $request)
     {
-        $templates = BkNotifications::where('hospital_branch', Auth::guard('booking')->user()->hospital_branch)
-            ->get()
-            ->map(function ($template) {
-                return [
-                    'id' => $template->id,
-                    'name' => $template->name,
-                    'type' => $template->type,
-                    'content' => $template->content
-                ];
-            });
+        try {
+            $templates = BkNotificationTemplates::where('hospital_branch', Auth::guard('booking')->user()->hospital_branch)
+                ->get()
+                ->map(function ($template) {
+                    return [
+                        'id' => $template->id,
+                        'name' => $template->name,
+                        'type' => $template->type,
+                        'content' => $template->getAttribute('content') // Use getAttribute to access protected properties
+                    ];
+                });
 
-        return response()->json(['templates' => $templates]);
+            return response()->json(['templates' => $templates]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching templates: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch templates'], 500);
+        }
     }
 
     public function saveTemplate(Request $request)
     {
+        if (Auth::guard('booking')->user()->role !== 'superadmin') {
+            return response()->json(['error' => 'Unauthorized to save templates'], 403);
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
-            'type' => 'required|in:default,urgent,followup,custom',
+            'type' => 'required|in:default,urgent,followup',
             'content' => 'required|string|max:160',
-            'is_default' => 'boolean'
+            'id' => 'nullable|exists:bk_notification_templates,id'
         ]);
 
-        $template = BkNotifications::updateOrCreate(
-            ['name' => $request->name, 'hospital_branch' => Auth::guard('booking')->user()->hospital_branch],
-            [
-                'type' => $request->type,
-                'content' => $request->content,
-                'is_default' => $request->is_default ?? false
-            ]
-        );
+        $data = [
+            'name' => $request->input('name'),
+            'type' => $request->input('type'),
+            'content' => $request->input('content'),
+            'hospital_branch' => Auth::guard('booking')->user()->hospital_branch,
+            'updated_by' => Auth::guard('booking')->user()->id
+        ];
 
-        return response()->json(['success' => true, 'template' => $template]);
+        if (!$request->input('id')) {
+            $data['created_by'] = Auth::guard('booking')->user()->id;
+        }
+
+        try {
+            $template = BkNotificationTemplates::updateOrCreate(
+                [
+                    'id' => $request->input('id'),
+                    'hospital_branch' => Auth::guard('booking')->user()->hospital_branch
+                ],
+                $data
+            );
+
+            return response()->json(['success' => true, 'template' => [
+                'id' => $template->id,
+                'name' => $template->name,
+                'type' => $template->type,
+                'content' => $template->getAttribute('content')
+            ]]);
+        } catch (\Exception $e) {
+            Log::error('Error saving template: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to save template'], 500);
+        }
+    }
+
+    public function deleteTemplate(Request $request)
+    {
+        if (Auth::guard('booking')->user()->role !== 'superadmin') {
+            return response()->json(['error' => 'Unauthorized to delete templates'], 403);
+        }
+
+        $request->validate([
+            'id' => 'required|exists:bk_notification_templates,id'
+        ]);
+
+        try {
+            $template = BkNotificationTemplates::where('id', $request->input('id'))
+                ->where('hospital_branch', Auth::guard('booking')->user()->hospital_branch)
+                ->first();
+
+            if (!$template) {
+                return response()->json(['error' => 'Template not found'], 404);
+            }
+
+            $template->delete();
+            return response()->json(['success' => true]);
+        } catch (\Exception $e) {
+            Log::error('Error deleting template: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to delete template'], 500);
+        }
     }
 }

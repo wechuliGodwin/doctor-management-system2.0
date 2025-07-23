@@ -360,6 +360,7 @@ Route::prefix('booking')->name('booking.')->middleware(['auth:booking'])->group(
         ->name('users.change-password');
     Route::patch('users/{user}/toggle-status', [BookingAuthController::class, 'toggleStatus'])
         ->name('users.toggle-status');
+    Route::post('booking/switch-branch', [BookingAuthController::class, 'switchBranch'])->name('booking.switch-branch');
 });
 // Doctor Management (admin/superadmin only)
 Route::prefix('auth/doctors')->name('booking.auth.doctors.')->group(function () {
@@ -402,6 +403,7 @@ Route::post('/booking/sms/send-bulk-sms', [SmsIntergrationController::class, 'se
 Route::get('/booking/sms/delivery-log-data', [SmsIntergrationController::class, 'getDeliveryLog'])->name('booking.getDeliveryLog');
 Route::get('/booking/sms/message-templates', [SmsIntergrationController::class, 'getTemplates'])->name('booking.getTemplates');
 Route::post('/booking/sms/save-template', [SmsIntergrationController::class, 'saveTemplate'])->name('booking.saveTemplate');
+Route::post('/booking/delete-template', [SmsIntergrationController::class, 'deleteTemplate'])->name('booking.deleteTemplate');
 
 // Specific Services Routes
 Route::get('/outpatient', function () {

@@ -538,48 +538,6 @@
                             ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
                         </span>
                     </li>
-
-                    <!-- Admin Branch Selector (only show if user is admin) -->
-                    <!-- @if(Auth::guard('booking')->user()->role === 'admin')
-                            <li class="nav-item dropdown me-3">
-                            <a class="nav-link dropdown-toggle text-white" href="#" id="branchDropdown" role="button"
-                                data-bs-toggle="dropdown" aria-expanded="false">
-                                Current Branch:
-                                {{ ucfirst($selectedBranch ?? Auth::guard('booking')->user()->hospital_branch) }}
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="branchDropdown">
-                                <li>
-                                    <form action="{{ route('booking.dashboard') }}" method="GET">
-                                        <button type="submit" class="dropdown-item" {{ !isset($selectedBranch) ? 'disabled' : '' }}>
-                                            All Branches
-                                        </button>
-                                    </form>
-                                </li>
-                                @php
-                                    $hospitalBranches = $hospitalBranches ?? ['kijabe', 'westlands', 'naivasha', 'marira'];
-                                @endphp
-                                @foreach($hospitalBranches as $branch)
-                                    <li>
-                                        <form action="{{ route('booking.dashboard') }}" method="GET">
-                                            <input type="hidden" name="branch" value="{{ $branch }}">
-                                            <button type="submit" class="dropdown-item" {{ ($selectedBranch ?? '') === $branch ? 'disabled' : '' }}>
-                                                {{ ucfirst($branch) }}
-                                            </button>
-                                        </form>
-                                    </li>
-                                @endforeach
-                            </ul>
-                        </li>
-                    @endif -->
-
-                    <!-- Raise Alert Button (uncomment if needed) -->
-                    <!--
-                    <li class="nav-item me-3">
-                        <button type="button" class="btn stylish-alert-btn" data-bs-toggle="modal"
-                            data-bs-target="#raiseAlertModal">+ Raise Alert</button>
-                    </li>
-                    -->
-
                     <!-- Settings Dropdown -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button"
@@ -591,6 +549,24 @@
                                     href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">Change
                                     Password</a>
                             </li>
+                            @if(count(Auth::guard('booking')->user()->switchable_branches ?? []) > 1)
+                            <li class="dropdown-submenu">
+                                <a class="dropdown-item dropdown-toggle" href="#" data-bs-toggle="dropdown">Switch Branch</a>
+                                <ul class="dropdown-menu">
+                                    @foreach(Auth::guard('booking')->user()->switchable_branches ?? [] as $branch)
+                                    <li>
+                                        <form action="{{ route('booking.switch-branch') }}" method="POST">
+                                            @csrf
+                                            <input type="hidden" name="branch" value="{{ $branch }}">
+                                            <button type="submit" class="dropdown-item" {{ session('selected_branch', Auth::guard('booking')->user()->hospital_branch) === $branch ? 'disabled' : '' }}>
+                                                {{ ucfirst($branch) }}
+                                            </button>
+                                        </form>
+                                    </li>
+                                    @endforeach
+                                </ul>
+                            </li>
+                            @endif
                             <li>
                                 <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
                                     @csrf
