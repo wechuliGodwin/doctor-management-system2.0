@@ -8,9 +8,18 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 @endif
-@if (session('error'))
+@if (session('error') && !session('suggested_dates'))
 <div class="alert alert-danger alert-dismissible fade show m-0 rounded-0" role="alert">
     <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+@endif
+@if ($errors->any())
+<div class="alert alert-danger alert-dismissible fade show m-0 rounded-0" role="alert">
+    <i class="fas fa-exclamation-circle me-2"></i>
+    @foreach ($errors->all() as $error)
+    {{ $error }}<br>
+    @endforeach
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 @endif
@@ -64,6 +73,33 @@
                         <i class="fas fa-undo me-1"></i>Reset
                     </a>
                 </form>
+                <!-- Default Limit Form -->
+                <form method="POST" action="{{ route('booking.specialization.set.default.limit') }}" class="mt-3">
+                    @csrf
+                    <div class="d-flex align-items-end gap-3">
+                        <div class="flex-grow-1">
+                            <label for="specialization_id" class="form-label small fw-semibold text-muted">
+                                <i class="fas fa-stethoscope me-1"></i>Select Specialization
+                            </label>
+                            <select name="specialization_id" id="specialization_id" class="form-control form-control-sm shadow-sm" required>
+                                <option value="">Select a specialization</option>
+                                @foreach($specializations as $specialization)
+                                <option value="{{ $specialization->id }}" data-default-limit="{{ $specialization->limits ?? ($default_limit ?? 10) }}">{{ $specialization->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label for="default_limit" class="form-label small fw-semibold text-muted">
+                                <i class="fas fa-tachometer-alt me-1"></i>Default Limit
+                            </label>
+                            <input type="number" name="default_limit" id="default_limit" class="form-control form-control-sm shadow-sm"
+                                min="0" required>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary shadow-sm">
+                            <i class="fas fa-save me-1"></i>Save Default
+                        </button>
+                    </div>
+                </form>
             </div>
 
             <!-- Table -->
@@ -73,10 +109,12 @@
                         <tr>
                             <th><i class="fas fa-stethoscope me-1"></i>Specialization</th>
                             <th><i class="fas fa-stethoscope me-1"></i>Specialization Group</th>
+                            <th><i class="fas fa-calendar-day me-1"></i>Days of Operation</th>
                             <th><i class="fas fa-tachometer-alt me-1"></i>Daily Limit</th>
                             <th><i class="fas fa-book me-1"></i>Bookings Today</th>
                             <th><i class="fas fa-chair me-1"></i>Remaining Slots</th>
-                            <th><i class="fas fa-cog me-1"></i>Action</th>
+                            <th><i class="fas fa-door-closed me-1"></i>Status</th>
+                            <th><i class="fas fa-cog me-1"></i>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -84,28 +122,53 @@
                         <tr>
                             <td>{{ $specialization->name }}</td>
                             <td>{{ $specialization->group_name }}</td>
-                            <td>{{ $specialization->limits }}</td>
-                            <td>{{ $activeBookings[$specialization->name] ?? 0 }}</td>
-                            <td>{{ max(0, $specialization->limits - ($activeBookings[$specialization->name] ?? 0)) }}
+                            <td>
+                                {{ is_array($specialization->days_of_week) && !empty($specialization->days_of_week) ? implode(', ', array_map('ucfirst', $specialization->days_of_week)) : 'Daily' }}
                             </td>
-
+                            <td>
+                                @php
+                                $dateLimit = $dateLimits[$specialization->id] ?? null;
+                                $effectiveLimit = $dateLimit ? $dateLimit->daily_limit : ($specialization->limits ?? ($default_limit ?? 10));
+                                @endphp
+                                {{ $dateLimit && $dateLimit->is_closed ? 'Closed' : $effectiveLimit }}
+                            </td>
+                            <td>{{ $activeBookings[$specialization->id] ?? 0 }}</td>
+                            <td>
+                                {{ $dateLimit && $dateLimit->is_closed ? 'N/A' : max(0, $effectiveLimit - ($activeBookings[$specialization->id] ?? 0)) }}
+                            </td>
+                            <td>
+                                {{ $dateLimit && $dateLimit->is_closed ? 'Closed' : 'Open' }}
+                            </td>
                             <td>
                                 <button
                                     class="btn btn-sm btn-primary shadow-sm open-limit-modal"
                                     data-bs-toggle="modal"
                                     data-bs-target="#limitModal"
                                     data-id="{{ $specialization->id }}"
-                                    data-limit="{{ $specialization->limits }}"
-                                    data-day="{{ $specialization->day_of_week }}"
-                                    data-group="{{ $specialization->group_id }}">
-                                    <i class="fas fa-edit me-1"></i>Change
+                                    data-limit="{{ $effectiveLimit }}"
+                                    data-days="{{ json_encode($specialization->days_of_week ?? ['daily']) }}"
+                                    data-group="{{ $specialization->group_id }}"
+                                    data-date="{{ $date->toDateString() }}"
+                                    data-is-closed="{{ $dateLimit ? (int)$dateLimit->is_closed : 0 }}"
+                                    data-name="{{ $specialization->name }}">
+                                    <i class="fas fa-edit me-1"></i>Edit
                                 </button>
+                                <form action="{{ route('booking.specialization.toggle.closure') }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to {{ $dateLimit && $dateLimit->is_closed ? 'reopen' : 'close' }} this specialization for {{ $date->toDateString() }}?');">
+                                    @csrf
+                                    @method('POST')
+                                    <input type="hidden" name="specialization_id" value="{{ $specialization->id }}">
+                                    <input type="hidden" name="date" value="{{ $date->toDateString() }}">
+                                    <input type="hidden" name="is_closed" value="{{ $dateLimit && $dateLimit->is_closed ? '0' : '1' }}">
+                                    <button type="submit" class="btn btn-sm {{ $dateLimit && $dateLimit->is_closed ? 'btn-success' : 'btn-danger' }} shadow-sm">
+                                        <i class="fas fa-door-{{ $dateLimit && $dateLimit->is_closed ? 'open' : 'closed' }} me-1"></i>
+                                        {{ $dateLimit && $dateLimit->is_closed ? 'Reopen' : 'Close' }}
+                                    </button>
+                                </form>
                             </td>
-
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="text-center text-muted py-4">
+                            <td colspan="8" class="text-center text-muted py-4">
                                 <i class="fas fa-exclamation-circle me-1"></i>No specializations found.
                             </td>
                         </tr>
@@ -117,13 +180,13 @@
     </div>
 </div>
 
-<!-- Modals for Changing Limits -->
-<!-- Single Modal -->
-<div class="modal fade" id="limitModal" tabindex="-1" aria-hidden="true">
+<!-- Modal for Changing Limits -->
+<div class="modal fade {{ session('specialization_id') ? 'show d-block' : '' }}" id="limitModal" tabindex="-1" aria-hidden="true" {{ session('specialization_id') ? 'style="background-color: rgba(0,0,0,0.5);"' : '' }}>
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-3 shadow-lg">
-            <form method="POST" action="{{ route('booking.specialization.update.limit') }}">
+            <form method="POST" action="{{ route('booking.specialization.update.limit') }}" id="limitForm">
                 @csrf
+                @method('POST')
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="fas fa-tachometer-alt me-2"></i>Change Limit
@@ -132,30 +195,33 @@
                 </div>
                 <div class="modal-body p-4">
                     <input type="hidden" name="specialization_id" id="modal_specialization_id">
+                    <input type="hidden" name="date" id="modal_date">
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
-                            <i class="fas fa-tachometer-alt me-1"></i>New Daily Limit
+                            <i class="fas fa-tachometer-alt me-1"></i>Daily Limit for Selected Date
                         </label>
                         <input type="number" name="daily_limit" id="modal_daily_limit"
-                            class="form-control shadow-sm" min="0" required>
+                            class="form-control shadow-sm" min="0" value="{{ old('daily_limit') }}">
+                        <small class="form-text text-muted">Set the limit for the specific date. Leave blank to use the specialization's default limit (or global default: {{ $default_limit ?? 10 }}).</small>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">
-                            <i class="fas fa-calendar-day me-1"></i>Day of the Week
+                            <i class="fas fa-calendar-day me-1"></i>Days of Operation
                         </label>
-                        <select name="day_of_week" id="modal_day_of_week"
-                            class="form-control shadow-sm" required>
-                            <option value="daily">Daily</option>
-                            <option value="monday">Monday</option>
-                            <option value="tuesday">Tuesday</option>
-                            <option value="wednesday">Wednesday</option>
-                            <option value="thursday">Thursday</option>
-                            <option value="friday">Friday</option>
-                            <option value="saturday">Saturday</option>
-                            <option value="sunday">Sunday</option>
-                        </select>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'daily'] as $day)
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input day-checkbox" type="checkbox" name="days_of_week[]"
+                                    id="day_{{ $day }}" value="{{ $day }}"
+                                    {{ $day === 'daily' ? 'data-exclusive' : '' }} {{ is_array(old('days_of_week', [])) && in_array($day, old('days_of_week', [])) ? 'checked' : '' }}>
+                                <label class="form-check-label day-label" for="day_{{ $day }}">
+                                    {{ ucfirst($day) }}
+                                </label>
+                            </div>
+                            @endforeach
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -166,9 +232,17 @@
                             class="form-control shadow-sm" required>
                             <option value="">Select Group</option>
                             @foreach($specializations_group as $group)
-                            <option value="{{ $group->id }}">{{ $group->group_name }}</option>
+                            <option value="{{ $group->id }}" {{ old('group_id') == $group->id ? 'selected' : '' }}>{{ $group->group_name }}</option>
                             @endforeach
                         </select>
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="is_closed" id="modal_is_closed"
+                            class="form-check-input" {{ old('is_closed') ? 'checked' : '' }}>
+                        <label class="form-check-label fw-semibold" for="modal_is_closed">
+                            <i class="fas fa-door-closed me-1"></i>Close Clinic for This Date
+                        </label>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -183,13 +257,14 @@
     </div>
 </div>
 
-
+<!-- Suggested Dates Modal -->
+@if (session('modal_target') === 'suggestedDatesModal')
+    @include('booking.suggested_dates_modal')
+@endif
 <!-- Custom Styles -->
 <style>
-    /* General Styles */
     body {
         background-color: #f5f9fc;
-        /* Very light blue from the family */
         font-family: 'Inter', sans-serif;
     }
 
@@ -206,12 +281,10 @@
     .card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 24px rgba(21, 158, 213, 0.1) !important;
-        /* Shadow with a hint of the primary color */
     }
 
     .card-header {
         background: linear-gradient(90deg, #159ed5, #0d6a9f);
-        /* Gradient using primary and darker shade */
         border-bottom: none;
         padding: 1rem 1.5rem;
     }
@@ -225,7 +298,6 @@
         padding: 0;
     }
 
-    /* Alerts */
     .alert {
         border-radius: 8px;
         margin: 1rem 1.5rem 0;
@@ -237,16 +309,12 @@
 
     .alert-success {
         background-color: #e6f4fa;
-        /* Very light blue for success */
         color: #0d6a9f;
-        /* Darker shade for text */
         border: 1px solid #b3e0f2;
-        /* Light blue border */
     }
 
     .alert-danger {
         background-color: #fff1f1;
-        /* Keep a light red for errors to indicate urgency */
         color: #d32f2f;
         border: 1px solid #ffcdd2;
     }
@@ -259,16 +327,13 @@
         opacity: 1;
     }
 
-    /* Filter Form */
     .bg-light {
         background-color: #f8fbfe !important;
-        /* Very light blue for the filter section */
     }
 
     .form-label {
         font-size: 0.85rem;
         color: #0d6a9f;
-        /* Darker shade for labels */
         margin-bottom: 0.25rem;
     }
 
@@ -276,20 +341,16 @@
     .form-control-sm {
         border-radius: 6px;
         border: 1px solid #d1e9f5;
-        /* Light blue border */
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     .form-control:focus {
         border-color: #159ed5;
-        /* Primary color on focus */
         box-shadow: 0 0 0 3px rgba(21, 158, 213, 0.1);
-        /* Light blue glow */
     }
 
     .btn-primary {
         background: linear-gradient(90deg, #159ed5, #0d6a9f);
-        /* Gradient using primary and darker shade */
         border: none;
         border-radius: 6px;
         font-weight: 500;
@@ -298,20 +359,17 @@
 
     .btn-primary:hover {
         background: linear-gradient(90deg, #0d6a9f, #159ed5);
-        /* Reverse gradient on hover */
         transform: translateY(-1px);
     }
 
     .btn-light {
         background-color: #ffffff;
         border: 1px solid #d1e9f5;
-        /* Light blue border */
         transition: background-color 0.2s ease, transform 0.1s ease;
     }
 
     .btn-light:hover {
         background-color: #e6f4fa;
-        /* Very light blue on hover */
         transform: translateY(-1px);
     }
 
@@ -323,12 +381,10 @@
         justify-content: center;
     }
 
-    /* Table Styles */
     .table-responsive {
         max-height: calc(100vh - 280px);
         overflow-y: auto;
         border-bottom: 1px solid #d1e9f5;
-        /* Light blue border */
     }
 
     .table {
@@ -338,14 +394,12 @@
 
     .table th {
         background: linear-gradient(90deg, #0d6a9f, #094d7a);
-        /* Darker shade gradient for table header */
         color: #ffffff;
         font-weight: 600;
         padding: 0.75rem 1rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         border-bottom: 2px solid #094d7a;
-        /* Even darker shade for border */
     }
 
     .table td {
@@ -356,22 +410,18 @@
 
     .table-striped tbody tr:nth-of-type(odd) {
         background-color: #f8fbfe;
-        /* Very light blue for odd rows */
     }
 
     .table-hover tbody tr:hover {
         background-color: #e6f4fa;
-        /* Very light blue on hover */
         transition: background-color 0.2s ease;
     }
 
     .table-bordered th,
     .table-bordered td {
         border: 1px solid #d1e9f5;
-        /* Light blue border */
     }
 
-    /* Modal Styles */
     .modal-content {
         border-radius: 12px;
         border: none;
@@ -379,7 +429,6 @@
 
     .modal-header {
         background: linear-gradient(90deg, #159ed5, #0d6a9f);
-        /* Gradient using primary and darker shade */
         border-bottom: none;
         padding: 1rem 1.5rem;
     }
@@ -400,20 +449,58 @@
 
     .btn-outline-secondary {
         border-color: #d1e9f5;
-        /* Light blue border */
         color: #0d6a9f;
-        /* Darker shade for text */
         transition: background-color 0.2s ease, color 0.2s ease;
     }
 
     .btn-outline-secondary:hover {
         background-color: #e6f4fa;
-        /* Very light blue on hover */
         color: #094d7a;
-        /* Even darker shade for text */
     }
 
-    /* Responsive Adjustments */
+    .form-check-inline {
+        margin-right: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-check-input.day-checkbox {
+        width: 1.25rem;
+        height: 1.25rem;
+        margin-top: 0.1rem;
+        border: 2px solid #d1e9f5;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+
+    .form-check-input.day-checkbox:checked {
+        background-color: #159ed5;
+        border-color: #159ed5;
+    }
+
+    .form-check-input.day-checkbox:focus {
+        box-shadow: 0 0 0 3px rgba(21, 158, 213, 0.1);
+    }
+
+    .form-check-label.day-label {
+        font-size: 0.9rem;
+        color: #37474f;
+        margin-left: 0.5rem;
+        cursor: pointer;
+    }
+
+    .form-check-label.day-label:hover {
+        color: #0d6a9f;
+    }
+
+    .list-group-item {
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .list-group-item:hover {
+        background-color: #e6f4fa;
+    }
+
     @media (max-width: 768px) {
         .container-fluid {
             padding: 0 1rem;
@@ -447,6 +534,19 @@
         .table-responsive {
             max-height: calc(100vh - 320px);
         }
+
+        .form-check-inline {
+            margin-right: 0.75rem;
+        }
+
+        .form-check-input.day-checkbox {
+            width: 1.1rem;
+            height: 1.1rem;
+        }
+
+        .form-check-label.day-label {
+            font-size: 0.85rem;
+        }
     }
 </style>
 
@@ -454,25 +554,51 @@
     document.addEventListener('DOMContentLoaded', () => {
         const limitModal = document.getElementById('limitModal');
         limitModal.addEventListener('show.bs.modal', event => {
-            // Button that triggered the modal
             const button = event.relatedTarget;
-
-            // Extract data attributes
             const id = button.getAttribute('data-id');
             const limit = button.getAttribute('data-limit');
-            const day = button.getAttribute('data-day');
+            const days = JSON.parse(button.getAttribute('data-days') || '["daily"]');
             const group = button.getAttribute('data-group');
+            const date = button.getAttribute('data-date');
+            const isClosed = button.getAttribute('data-is-closed') === '1';
+            const name = button.getAttribute('data-name');
 
-            // Populate the modal fields
             limitModal.querySelector('#modal_specialization_id').value = id;
             limitModal.querySelector('#modal_daily_limit').value = limit;
-            limitModal.querySelector('#modal_day_of_week').value = day;
+            limitModal.querySelector('#modal_date').value = date;
             limitModal.querySelector('#modal_group_id').value = group;
+            limitModal.querySelector('#modal_is_closed').checked = isClosed;
 
-            // (Optional) change the modal title:
-            const title = button.closest('tr').querySelector('td:first-child').innerText;
+            const checkboxes = limitModal.querySelectorAll('.day-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = days.includes(checkbox.value);
+            });
+
             limitModal.querySelector('.modal-title').innerHTML =
-                `<i class="fas fa-tachometer-alt me-2"></i>Change Limit for ${title}`;
+                `<i class="fas fa-tachometer-alt me-2"></i>Change Limit for ${name}`;
+        });
+
+        const dailyCheckbox = document.querySelector('#day_daily');
+        const otherCheckboxes = document.querySelectorAll('.day-checkbox:not([data-exclusive])');
+        dailyCheckbox.addEventListener('change', () => {
+            if (dailyCheckbox.checked) {
+                otherCheckboxes.forEach(cb => cb.checked = false);
+            }
+        });
+        otherCheckboxes.forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) {
+                    dailyCheckbox.checked = false;
+                }
+            });
+        });
+
+        const specializationSelect = document.getElementById('specialization_id');
+        const defaultLimitInput = document.getElementById('default_limit');
+        specializationSelect.addEventListener('change', () => {
+            const selectedOption = specializationSelect.options[specializationSelect.selectedIndex];
+            const defaultLimit = selectedOption ? selectedOption.getAttribute('data-default-limit') : '';
+            defaultLimitInput.value = defaultLimit || '';
         });
     });
 </script>

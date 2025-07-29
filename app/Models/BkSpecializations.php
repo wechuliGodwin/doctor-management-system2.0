@@ -14,4 +14,17 @@ class BkSpecializations extends Model
         'day_of_week',
         'hospital_branch',
     ];
+    protected $casts = [
+        'days_of_week' => 'array',
+    ];
+
+    public function dateLimits()
+    {
+        return $this->hasMany(BkSpecializationDateLimits::class, 'specialization_id');
+    }
+
+    public function specializationGroup()
+    {
+        return $this->belongsTo(BkSpecializationsGroup::class, 'group_id');
+    }
 }

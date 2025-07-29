@@ -328,12 +328,21 @@ Route::get('/appointments/cancelled', [BookingController::class, 'appointmentsCa
 Route::delete('/booking/{id}/delete', [BookingController::class, 'deleteAppointment'])->name('booking.delete');
 Route::get('/booking/view-limits', [BookingController::class, 'viewLimits'])->name('booking.viewLimits');
 Route::patch('/booking/specializations/{specialization_id}/limit', [BookingController::class, 'updateLimit'])->name('booking.updateLimit');
+Route::post('/booking/clear-suggested-dates', [BookingController::class, 'clearSuggestedDates'])->name('booking.clearSuggestedDates');
 Route::get('/booking/specialization-counts', [BookingController::class, 'getSpecializationCounts'])->name('booking.getSpecializationCounts');
 
 Route::get('/booking/reports', [BookingController::class, 'reports'])->middleware('web', 'auth.booking')->name('booking.reports');
 Route::get('/booking/report-details', [BookingController::class, 'detailedReport'])->name('booking.detailed-report');
 Route::get('/booking/specialization-limits', [BookingController::class, 'specializationLimits'])->middleware('web', 'auth.booking')->name('booking.specialization.limits');
 Route::post('/booking/specialization-limits/update', [BookingController::class, 'updateSpecializationLimit'])->middleware('web', 'auth.booking')->name('booking.specialization.update.limit');
+Route::get('/booking/suggested-dates', [BookingController::class, 'getSuggestedDatesForSpecialization'])
+    ->name('booking.specialization.suggested.dates')
+    ->middleware(['web', 'auth.booking']);
+Route::post('/booking/specialization/set-default-limit', [BookingController::class, 'setDefaultLimit'])
+    ->name('booking.specialization.set.default.limit')
+    ->middleware(['web', 'auth.booking']);
+Route::post('/specialization/toggle-closure', [BookingController::class, 'toggleClinicClosure'])->name('booking.specialization.toggle.closure');
+Route::post('/booking/select-suggested-date', [BookingController::class, 'selectSuggestedDate'])->name('booking.selectSuggestedDate');
 //calender
 Route::get('/booking/calendar', [BookingController::class, 'calendar'])->middleware('web', 'auth.booking')->name('booking.calendar');
 Route::post('/booking/add-holiday', [BookingController::class, 'addHoliday'])->middleware('web', 'auth.booking')->name('booking.addHoliday');
@@ -360,7 +369,7 @@ Route::prefix('booking')->name('booking.')->middleware(['auth:booking'])->group(
         ->name('users.change-password');
     Route::patch('users/{user}/toggle-status', [BookingAuthController::class, 'toggleStatus'])
         ->name('users.toggle-status');
-    Route::post('booking/switch-branch', [BookingAuthController::class, 'switchBranch'])->name('booking.switch-branch');
+    Route::post('switch-branch', [BookingAuthController::class, 'switchBranch'])->name('switch-branch');
 });
 // Doctor Management (admin/superadmin only)
 Route::prefix('auth/doctors')->name('booking.auth.doctors.')->group(function () {

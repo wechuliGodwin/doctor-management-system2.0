@@ -79,6 +79,7 @@ class Kernel extends HttpKernel
         'auth.booking' => \App\Http / Middleware\BookingAuthenticate::class,
         'admin' => \App\Http\Middleware\BookingAdmin::class,
         'superadmin' => \App\Http\Middleware\SuperadminMiddleware::class,
-        'adminOrSuperadmin' => \App\Http\Middleware\AdminOrSuperadminMiddleware::class
+        'adminOrSuperadmin' => \App\Http\Middleware\AdminOrSuperadminMiddleware::class,
+        'check.branch.write' => \App\Http\Middleware\CheckBranchWritePermission::class,
     ];
 }
