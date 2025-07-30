@@ -48,6 +48,30 @@ class BookingAuthController extends Controller
         ]);
     }
 
+    protected $casts = [
+        'switchable_branches' => 'array', // Automatically cast JSON to array
+        'branch_permissions' => 'array',
+        'is_active' => 'boolean',
+    ];
+
+    // Optional: Explicit accessor for additional control
+    public function getSwitchableBranchesAttribute($value)
+    {
+        if (is_string($value)) {
+            return json_decode($value, true) ?? [];
+        }
+        return $value ?? [];
+    }
+
+    // Optional: Explicit accessor for branch_permissions
+    public function getBranchPermissionsAttribute($value)
+    {
+        if (is_string($value)) {
+            return json_decode($value, true) ?? [];
+        }
+        return $value ?? [];
+    }
+
     /**
      * Display a listing of users based on role permissions
      */
@@ -219,7 +243,7 @@ class BookingAuthController extends Controller
     // Update the user
     $user->update($validated);
 
-    \Log::info('User updated', [
+    Log::info('User updated', [
         'user_id' => $user->id,
         'updated_by' => $currentUser->id,
         'switchable_branches' => $validated['switchable_branches'],
@@ -230,30 +254,42 @@ class BookingAuthController extends Controller
 }
     // Switch user's hospital branch
     public function switchBranch(Request $request)
-    {
-        $user = Auth::guard('booking')->user();
-        $validated = $request->validate([
-            'branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
-        ]);
+{
+    $user = Auth::guard('booking')->user();
+    $validated = $request->validate([
+        'branch' => ['required', 'in:' . implode(',', $this->getHospitalBranchEnumValues())],
+    ]);
 
-        // Check if the user is allowed to switch to the selected branch
-        if (!in_array($validated['branch'], $user->switchable_branches ?? [])) {
-            return back()->withErrors(['branch' => 'You are not authorized to switch to this branch.']);
-        }
-
-        // Update the user's hospital_branch
-        $user->update(['hospital_branch' => $validated['branch']]);
-
-        // Store the selected branch in session for data filtering
-        session(['selected_branch' => $validated['branch']]);
-
-        Log::info('User switched branch', [
-            'user_id' => $user->id,
-            'new_branch' => $validated['branch'],
-        ]);
-
-        return redirect()->back()->with('success', 'Branch switched successfully.');
+    // Ensure switchable_branches is an array
+    $switchableBranches = $user->switchable_branches ?? [];
+    if (!is_array($switchableBranches)) {
+        $switchableBranches = json_decode($switchableBranches, true) ?? [];
     }
+
+    // Check if the user is allowed to switch to the selected branch
+    if (!in_array($validated['branch'], $switchableBranches)) {
+        \Log::warning('Unauthorized branch switch attempt', [
+            'user_id' => $user->id,
+            'attempted_branch' => $validated['branch'],
+            'switchable_branches' => $switchableBranches,
+        ]);
+        return back()->withErrors(['branch' => 'You are not authorized to switch to this branch.']);
+    }
+
+    // Update the user's hospital_branch
+    $user->update(['hospital_branch' => $validated['branch']]);
+
+    // Store the selected branch in session for data filtering
+    session(['selected_branch' => $validated['branch']]);
+
+    \Log::info('User switched branch', [
+        'user_id' => $user->id,
+        'new_branch' => $validated['branch'],
+        'switchable_branches' => $switchableBranches,
+    ]);
+
+    return redirect()->back()->with('success', 'Branch switched successfully.');
+}
     public function showChangePasswordForm($id)
     {
         $currentUser = Auth::guard('booking')->user();

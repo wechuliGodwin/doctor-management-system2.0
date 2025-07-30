@@ -4527,7 +4527,6 @@ class BookingController extends Controller
             'specialization_id' => $additionalData['specialization_id'] ?? null,
         ]);
     }
-
     private function getDefaultLimit()
     {
         return cache()->get('default_specialization_limit', 10);
@@ -4578,16 +4577,69 @@ class BookingController extends Controller
         $viewMode = $request->input('view', 'month');
         $date = $request->input('date', now()->toDateString());
         $search = $request->input('search');
-
-        // Get current user's branch
+        $doctorId = $request->input('doctor_id');
+        $doctorName = $request->input('doctor_name');
         $userBranch = Auth::guard('booking')->user()->hospital_branch;
+        $isSuperadmin = Auth::guard('booking')->user()->is_superadmin ?? false;
+        $selectedBranch = $isSuperadmin ? $request->input('branch', $userBranch) : $userBranch;
+        $action = $request->input('action');
 
-        $appointments = $this->getAllAppointmentsForCalendar($date, $viewMode, $search, $userBranch);
+        \Log::info('Calendar Request', [
+            'viewMode' => $viewMode,
+            'date' => $date,
+            'search' => $search,
+            'doctorId' => $doctorId,
+            'doctorName' => $doctorName,
+            'userBranch' => $userBranch,
+            'selectedBranch' => $selectedBranch,
+            'isSuperadmin' => $isSuperadmin,
+            'request_branch' => $request->input('branch'),
+            'action' => $action,
+            'all_params' => $request->all(), // Log all request parameters
+        ]);
+
+        // Handle AJAX request for doctors
+        if ($request->ajax() && $action === 'get_doctors') {
+            $doctors = $this->getDoctorsByBranch($selectedBranch);
+            \Log::debug('Returning doctors for AJAX request', [
+                'success' => true,
+                'doctors_count' => count($doctors),
+                'doctors_sample' => array_slice($doctors, 0, 3),
+                'branch' => $selectedBranch,
+            ]);
+            return response()->json([
+                'success' => true,
+                'doctors' => $doctors
+            ]);
+        }
+
+        // Handle AJAX request for calendar data
+        if ($request->ajax()) {
+            $appointments = $this->getAllAppointmentsForCalendar($date, $viewMode, $search, $selectedBranch, $doctorId, $doctorName);
+            $bookingsData = $this->calculateBookingsData($appointments, $viewMode, $date);
+            \Log::debug('Returning calendar data for AJAX request', [
+                'calendar_data_count' => count($bookingsData),
+                'appointments_count' => count($appointments),
+                'date' => $date,
+                'viewMode' => $viewMode,
+            ]);
+            return response()->json([
+                'success' => true,
+                'calendar_data' => $bookingsData,
+                'appointments_by_doctor' => $this->groupAppointmentsByDoctor($appointments),
+                'date' => $date,
+                'month' => Carbon::parse($date)->format('Y-m'),
+                'doctor_id' => $doctorId,
+                'doctor_name' => $doctorName,
+            ]);
+        }
+
+        $doctors = $this->getDoctorsByBranch($selectedBranch);
+        $appointments = $this->getAllAppointmentsForCalendar($date, $viewMode, $search, $selectedBranch, $doctorId, $doctorName);
         $bookingsData = $this->calculateBookingsData($appointments, $viewMode, $date);
 
-        // Filter holidays by branch if they have branch column, otherwise show all
-        $holidays = Holiday::when(Schema::hasColumn('holidays', 'hospital_branch'), function ($query) use ($userBranch) {
-            return $query->where('hospital_branch', $userBranch);
+        $holidays = Holiday::when(Schema::hasColumn('holidays', 'hospital_branch'), function ($query) use ($selectedBranch) {
+            return $query->where('hospital_branch', $selectedBranch);
         })->get()->map(function ($holiday) {
             return [
                 'title' => $holiday->name,
@@ -4598,8 +4650,8 @@ class BookingController extends Controller
             ];
         })->toArray();
 
-        $upcomingAppointments = $this->getUpcomingAppointments($userBranch);
-        $this->sendAppointmentReminders($userBranch);
+        $upcomingAppointments = $this->getUpcomingAppointments($selectedBranch);
+        $this->sendAppointmentReminders($selectedBranch);
 
         return view('booking.calendar', [
             'title' => 'Appointment Calendar',
@@ -4608,11 +4660,94 @@ class BookingController extends Controller
             'upcomingAppointments' => $upcomingAppointments,
             'viewMode' => $viewMode,
             'currentDate' => $date,
+            'currentMonth' => Carbon::parse($date)->format('Y-m'),
             'appointments' => $appointments,
             'userBranch' => $userBranch,
+            'doctors' => $doctors,
+            'selectedBranch' => $selectedBranch,
+            'isSuperadmin' => $isSuperadmin,
+            'hospitalBranches' => $this->getHospitalBranches(),
         ]);
     }
-    protected function getAllAppointmentsForCalendar($date, $viewMode, $search = null, $userBranch = null)
+    protected function getDoctorsByBranch($branch)
+    {
+        \Log::debug('getDoctorsByBranch called', [
+            'branch' => $branch,
+            'is_empty' => empty($branch),
+            'is_null' => is_null($branch),
+        ]);
+
+        $branch = $branch ? trim(strtolower($branch)) : null;
+        $query = BkDoctor::select('id', 'doctor_name', 'department')
+            ->orderBy('doctor_name');
+
+        if ($branch) {
+            $query->whereRaw('LOWER(TRIM(hospital_branch)) = ?', [$branch]);
+            \Log::debug('Applying hospital_branch filter', ['branch' => $branch]);
+        } else {
+            \Log::warning('No branch provided, fetching all doctors');
+        }
+
+        $doctors = $query->get()
+            ->map(function ($doctor) {
+                return (object)[
+                    'id' => $doctor->id,
+                    'doctor_name' => trim($doctor->doctor_name),
+                    'department' => $doctor->department ?? 'General',
+                ];
+            })
+            ->unique('doctor_name')
+            ->sortBy('doctor_name')
+            ->values()
+            ->toArray();
+
+        // Fallback: Fetch doctor names from appointments if no doctors found
+        if (empty($doctors) && $branch) {
+            \Log::warning('No doctors found in bk_doctor, checking appointments', ['branch' => $branch]);
+            $appointmentDoctors = BkAppointments::select('doctor_name')
+                ->whereNotNull('doctor_name')
+                ->whereRaw('LOWER(TRIM(hospital_branch)) = ?', [$branch])
+                ->distinct()
+                ->pluck('doctor_name')
+                ->map(function ($name, $index) {
+                    return (object)[
+                        'id' => 'temp_' . $index, // Temporary ID
+                        'doctor_name' => trim($name),
+                        'department' => 'General',
+                    ];
+                })->toArray();
+
+            $externalDoctors = ExternalApproved::select('doctor_name')
+                ->whereNotNull('doctor_name')
+                ->whereRaw('LOWER(TRIM(hospital_branch)) = ?', [$branch])
+                ->distinct()
+                ->pluck('doctor_name')
+                ->map(function ($name, $index) use ($appointmentDoctors) {
+                    return (object)[
+                        'id' => 'temp_' . (count($appointmentDoctors) + $index),
+                        'doctor_name' => trim($name),
+                        'department' => 'General',
+                    ];
+                })->toArray();
+
+            $doctors = collect(array_merge($appointmentDoctors, $externalDoctors))
+                ->unique('doctor_name')
+                ->sortBy('doctor_name')
+                ->values()
+                ->toArray();
+        }
+
+        \Log::info('Doctors fetched for branch', [
+            'branch' => $branch,
+            'count' => count($doctors),
+            'sample' => array_slice($doctors, 0, 3),
+            'query' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
+        return $doctors;
+    }
+    protected function getAllAppointmentsForCalendar($date, $viewMode, $search = null, $branch = null, $doctorId = null, $doctorName = null)
     {
         $startDate = Carbon::parse($date);
         if ($viewMode === 'day') {
@@ -4626,36 +4761,75 @@ class BookingController extends Controller
             $endDate = $startDate->copy()->endOfMonth();
         }
 
+        \Log::info('Fetching appointments for calendar', [
+            'startDate' => $startDate->toDateString(),
+            'endDate' => $endDate->toDateString(),
+            'branch' => $branch,
+            'doctorId' => $doctorId,
+            'doctorName' => $doctorName,
+            'viewMode' => $viewMode,
+            'search' => $search,
+        ]);
+
         $queries = [
-            'new' => NewAppointment::select(['id', 'full_name', 'patient_number', 'phone', 'appointment_date', 'appointment_time', 'specialization', 'doctor_name as doctor', 'booking_type', 'appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
+            'new' => BkAppointments::query()
+                ->select([
+                    'bk_appointments.id',
+                    'bk_appointments.full_name',
+                    'bk_appointments.patient_number',
+                    'bk_appointments.phone',
+                    'bk_appointments.appointment_date',
+                    'bk_appointments.appointment_time',
+                    'bk_specializations.name as specialization',
+                    DB::raw('COALESCE(bk_doctor.doctor_name, bk_appointments.doctor_name, "-") as doctor'),
+                    'bk_appointments.booking_type',
+                    'bk_appointments.appointment_status',
+                ])
+                ->leftJoin('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
+                ->leftJoin('bk_doctor', function ($join) {
+                    $join->on('bk_appointments.doctor_id', '=', 'bk_doctor.id')
+                        ->orOn(DB::raw('LOWER(bk_appointments.doctor_name)'), '=', DB::raw('LOWER(bk_doctor.doctor_name)'));
+                })
+                ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate])
+                ->when($branch, function ($query) use ($branch) {
+                    return $query->whereRaw('LOWER(TRIM(bk_appointments.hospital_branch)) = ?', [trim(strtolower($branch))]);
+                })
+                ->when($doctorId && !str_starts_with($doctorId, 'temp_'), function ($query) use ($doctorId) {
+                    return $query->where('bk_appointments.doctor_id', $doctorId);
+                })
+                ->when($doctorName || ($doctorId && str_starts_with($doctorId, 'temp_')), function ($query) use ($doctorName, $doctorId) {
+                    $name = $doctorName ?: ($doctorId ? BkDoctor::find($doctorId)->doctor_name ?? null : null);
+                    if ($name) {
+                        return $query->whereRaw('LOWER(TRIM(bk_appointments.doctor_name)) = ?', [trim(strtolower($name))]);
+                    }
                 }),
-            'review' => ReviewAppointment::select(['id', 'full_name', 'patient_number', 'phone', 'appointment_date', 'appointment_time', 'specialization', 'doctor_name as doctor', 'booking_type', 'appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
-                }),
-            'postop' => PostOpAppointment::select(['id', 'full_name', 'patient_number', 'phone', 'appointment_date', 'appointment_time', 'specialization', 'doctor_name as doctor', 'booking_type', 'appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
-                }),
-            'external_pending' => ExternalPendingApproval::select(['id', 'appointment_number', 'full_name', 'patient_number', 'phone', 'appointment_date', DB::raw('NULL as appointment_time'), 'specialization', DB::raw('NULL as doctor'), DB::raw('NULL as hospital_branch'), DB::raw('"external" as booking_type'), 'status as appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
-                }),
-            'external_approved' => ExternalApproved::select(['id', 'booking_id as appointment_number', 'full_name', 'patient_number', 'phone', 'appointment_date', 'appointment_time', 'specialization', 'doctor_name as doctor', 'booking_type', 'appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
-                }),
-            'cancelled' => CancelledAppointment::select(['id', 'appointment_number', 'full_name', 'patient_number', 'phone', 'appointment_date', 'appointment_time', 'specialization', 'doctor_name as doctor', 'booking_type', 'appointment_status'])
-                ->whereBetween('appointment_date', [$startDate, $endDate])
-                ->when($userBranch, function ($query) use ($userBranch) {
-                    return $query->where('hospital_branch', $userBranch);
+            'external_approved' => ExternalApproved::query()
+                ->select([
+                    'external_approveds.id',
+                    'external_approveds.booking_id as appointment_number',
+                    'external_approveds.full_name',
+                    'external_approveds.patient_number',
+                    'external_approveds.phone',
+                    'external_approveds.appointment_date',
+                    'external_approveds.appointment_time',
+                    'bk_specializations.name as specialization',
+                    DB::raw('COALESCE(bk_doctor.doctor_name, external_approveds.doctor_name, "-") as doctor'),
+                    DB::raw("'external_approved' as booking_type"),
+                    'external_approveds.appointment_status',
+                ])
+                ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
+                ->leftJoin('bk_doctor', function ($join) {
+                    $join->on(DB::raw('LOWER(external_approveds.doctor_name)'), '=', DB::raw('LOWER(bk_doctor.doctor_name)'));
+                })
+                ->whereBetween('external_approveds.appointment_date', [$startDate, $endDate])
+                ->when($branch, function ($query) use ($branch) {
+                    return $query->whereRaw('LOWER(TRIM(external_approveds.hospital_branch)) = ?', [trim(strtolower($branch))]);
+                })
+                ->when($doctorName || ($doctorId && str_starts_with($doctorId, 'temp_')), function ($query) use ($doctorName, $doctorId) {
+                    $name = $doctorName ?: ($doctorId ? BkDoctor::find($doctorId)->doctor_name ?? null : null);
+                    if ($name) {
+                        return $query->whereRaw('LOWER(TRIM(external_approveds.doctor_name)) = ?', [trim(strtolower($name))]);
+                    }
                 }),
         ];
 
@@ -4666,7 +4840,7 @@ class BookingController extends Controller
                         ->orWhere('patient_number', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%")
                         ->orWhere('specialization', 'like', "%{$search}%")
-                        ->orWhere('doctor_name', 'like', "%{$search}%");
+                        ->orWhereRaw('LOWER(doctor_name) LIKE ?', ["%{$search}%"]);
                 });
             }
         }
@@ -4674,20 +4848,15 @@ class BookingController extends Controller
         $allAppointments = [];
         $colorMap = [
             'new' => '#28a745',
-            'review' => '#007bff',
-            'postop' => '#ffc107',
-            'external_pending' => '#fd7e14',
             'external_approved' => '#17a2b8',
-            'cancelled' => '#dc3545',
         ];
 
         foreach ($queries as $type => $query) {
             $appointments = $query->get()->map(function ($appt) use ($type, $colorMap) {
-                // Normalize the start datetime
-                $startDate = Carbon::parse($appt->appointment_date)->startOfDay(); // Strip any time from date
+                $startDate = Carbon::parse($appt->appointment_date)->startOfDay();
                 $start = $appt->appointment_time
                     ? $startDate->setTimeFromTimeString($appt->appointment_time)->toIso8601String()
-                    : $startDate->toDateString(); // Use date only if no time
+                    : $startDate->toDateString();
 
                 return [
                     'id' => $appt->id,
@@ -4707,10 +4876,41 @@ class BookingController extends Controller
                     ],
                 ];
             })->toArray();
+
+            \Log::info("Appointments for type {$type}", [
+                'count' => count($appointments),
+                'sample' => array_slice($appointments, 0, 3),
+            ]);
+
             $allAppointments = array_merge($allAppointments, $appointments);
         }
 
         return $allAppointments;
+    }
+    protected function groupAppointmentsByDoctor($appointments)
+    {
+        $grouped = [];
+        foreach ($appointments as $appt) {
+            $doctor = $appt['extendedProps']['doctor'] ?? 'Unknown';
+            $specialization = $appt['extendedProps']['specialization'] ?? 'General';
+            if (!isset($grouped[$doctor])) {
+                $grouped[$doctor] = [
+                    'doctor_name' => $doctor,
+                    'specialization' => $specialization,
+                    'total' => 0,
+                    'reminder_status' => 'Not Sent', // Adjust based on your logic
+                    'appointments' => [],
+                ];
+            }
+            $grouped[$doctor]['appointments'][] = [
+                'time' => $appt['extendedProps']['appointment_time'] ?? 'N/A',
+                'patient' => $appt['title'],
+                'details' => $appt['extendedProps']['patient_number'] . ' - ' . $appt['extendedProps']['specialization'],
+                'status' => $appt['extendedProps']['appointment_status'] ?? 'Unknown',
+            ];
+            $grouped[$doctor]['total']++;
+        }
+        return array_values($grouped);
     }
     protected function calculateBookingsData($appointments, $viewMode, $date)
     {
@@ -4736,38 +4936,14 @@ class BookingController extends Controller
 
         return $slots;
     }
+
     protected function summarizeBookings($appointments, $date)
     {
-        $dayAppointments = array_filter($appointments, function ($appt) use ($date) {
-            return Carbon::parse($appt['start'])->toDateString() === $date;
-        });
-
-        $counts = [
-            'new' => 0,
-            'review' => 0,
-            'postop' => 0,
-            'external_pending' => 0,
-            'external_approved' => 0,
-            'cancelled' => 0,
-        ];
-
-        foreach ($dayAppointments as $appt) {
-            $type = $appt['extendedProps']['type'];
-            $counts[$type]++;
-        }
-
-        $specializations = BkSpecializations::all();
-        $remainingSlots = [];
-        foreach ($specializations as $spec) {
-            $active = $this->getActiveBookingsForDate($spec->name, $date);
-            $remainingSlots[$spec->name] = max(0, $spec->daily_limit - $active);
-        }
-
-        return [
-            'counts' => $counts,
-            'appointments' => $dayAppointments,
-            'remaining_slots' => $remainingSlots,
-        ];
+        $dateString = $date instanceof Carbon ? $date->toDateString() : $date;
+        return collect($appointments)->filter(function ($appt) use ($dateString) {
+            $apptDate = Carbon::parse($appt['start'])->toDateString();
+            return $apptDate === $dateString;
+        })->count();
     }
     private function getUpcomingAppointments()
     {

@@ -18,457 +18,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
 
     <style>
-    body {
-        background-color: #f4f7fa;
-        font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        overflow-x: hidden;
-        position: relative;
-    }
-
-    .navbar {
-        background: linear-gradient(90deg, #159ed5 0%, #159ed5 100%);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        position: fixed;
-        top: 0;
-        left: 220px;
-        width: calc(100% - 220px);
-        z-index: 1000;
-        transition: left 0.3s ease, width 0.3s ease;
-        padding: 0.5rem 1rem;
-        min-height: 50px;
-    }
-
-    .navbar.hidden-sidebar {
-        left: 0;
-        width: 100%;
-    }
-
-    .nav-link {
-        color: #ffffff !important;
-        font-weight: 500;
-        padding: 6px 12px;
-        transition: all 0.3s ease;
-    }
-
-    .nav-link:hover {
-        color: #e0e0e0 !important;
-        background-color: rgba(255, 255, 255, 0.15);
-        border-radius: 8px;
-    }
-
-    .dropdown-submenu {
-        position: relative;
-    }
-
-    .dropdown-submenu .dropdown-menu {
-        top: 0;
-        right: 100%;
-        /* Show on the left instead of left: 100% */
-        left: auto;
-        margin-top: -1px;
-        display: none;
-    }
-
-    .dropdown-submenu:hover .dropdown-menu {
-        display: block;
-    }
-
-    /* Ensure dropdown menu is visible on click */
-    .dropdown-submenu .dropdown-menu.show {
-        display: block;
-    }
-
-    /* Responsive for mobile – keep same */
-    @media (max-width: 768px) {
-        .dropdown-submenu .dropdown-menu {
-            left: 0;
+        body {
+            background-color: #f4f7fa;
+            font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            overflow-x: hidden;
             position: relative;
-            margin-left: 20px;
-        }
-    }
-
-
-    .sidebar {
-        width: 220px;
-        height: 100vh;
-        background: #ffffff;
-        position: fixed;
-        top: 0;
-        left: 0;
-        box-shadow: 2px 0 15px rgba(0, 0, 0, 0.08);
-        transition: transform 0.3s ease;
-        z-index: 900;
-        overflow-y: auto;
-        padding: 20px 10px;
-    }
-
-    .sidebar.hidden {
-        transform: translateX(-220px);
-    }
-
-    .sidebar::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    .sidebar::-webkit-scrollbar-thumb {
-        background: #159ed5;
-        border-radius: 3px;
-    }
-
-    .sidebar::-webkit-scrollbar-track {
-        background: #f4f7fa;
-    }
-
-    .sidebar .sidebar-header {
-        padding: 20px 15px;
-        text-align: center;
-        font-size: 1.8rem;
-        font-weight: 700;
-        letter-spacing: 2px;
-        color: #159ed5;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: #ffffff;
-        border-bottom: 1px solid #e0e0e0;
-    }
-
-    .sidebar ul {
-        padding: 10px 0;
-        margin: 0;
-    }
-
-    .sidebar a {
-        color: #333;
-        padding: 12px 15px;
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        font-size: 1rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        border-radius: 0 25px 25px 0;
-    }
-
-    .sidebar a i {
-        margin-right: 12px;
-        width: 20px;
-        text-align: center;
-        color: #159ed5;
-        font-size: 1.1rem;
-        transition: all 0.3s ease;
-    }
-
-    .sidebar a:hover {
-        background: linear-gradient(to right, #e6eef5, #f0f5fa);
-        color: #159ed5;
-        margin-right: 5px;
-    }
-
-    .sidebar a:hover i {
-        color: #159ed5;
-        transform: scale(1.1);
-    }
-
-    .sidebar a.active {
-        background: linear-gradient(to right, rgb(127, 207, 238), rgb(115, 196, 233));
-        color: #ffffff;
-        margin-right: 5px;
-        font-weight: 600;
-    }
-
-    .sidebar a.active i {
-        color: #ffffff;
-    }
-
-    .has-submenu .submenu-toggle {
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        padding-right: 10px;
-    }
-
-    .has-submenu .menu-text {
-        flex-grow: 1;
-    }
-
-    .submenu-indicator {
-        font-size: 0.8rem;
-        transition: transform 0.3s ease;
-        color: #159ed5;
-    }
-
-    .has-submenu .submenu-toggle.active .submenu-indicator {
-        transform: rotate(180deg);
-        color: #ffffff;
-    }
-
-    .submenu {
-        display: none;
-        list-style: none;
-        padding-left: 30px;
-        margin: 5px 0;
-        background: #f9fafb;
-        border-left: 2px solid #e0e0e0;
-    }
-
-    .submenu.show {
-        display: block;
-    }
-
-    .submenu li a {
-        padding: 8px 15px;
-        color: #495057;
-        font-size: 0.9rem;
-        font-weight: 400;
-        transition: all 0.3s ease;
-        background: none;
-        border-radius: 5px;
-    }
-
-    .submenu li a i {
-        font-size: 0.9rem;
-        color: #6c757d;
-    }
-
-    .submenu li a:hover,
-    .submenu li a.active {
-        color: #159ed5;
-        background: #e9ecef;
-        padding-left: 20px;
-    }
-
-    .submenu li a:hover i,
-    .submenu li a.active i {
-        color: #159ed5;
-        transform: none;
-    }
-
-    .main-content {
-        margin-left: 220px;
-        padding: 20px;
-        padding-top: 30px;
-        min-height: 100vh;
-        background: #f4f7fa;
-        transition: margin-left 0.3s ease;
-    }
-
-    .main-content.hidden-sidebar {
-        margin-left: 0;
-    }
-
-    .alert-panel {
-        margin-top: 70px;
-        margin-left: 250px;
-        padding-top: 20px;
-        margin-right: 20px;
-        margin-bottom: 0px;
-        transition: margin-left 0.3s ease;
-    }
-
-    .alert-panel.hidden-sidebar {
-        margin-left: 0;
-    }
-
-    .widget {
-        background: #ffffff;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
-    }
-
-    .widget h3 {
-        margin-bottom: 15px;
-        font-size: 1.3rem;
-        font-weight: 600;
-        color: #2c3e50;
-    }
-
-    .widget p {
-        font-size: 1.6rem;
-        font-weight: 500;
-        color: #159ed5;
-        margin: 0;
-    }
-
-    .footer {
-        background: #ffffff;
-        color: #555;
-        text-align: center;
-        padding: 20px 0;
-        width: calc(100% - 220px);
-        margin-left: 220px;
-        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
-        transition: margin-left 0.3s ease, width 0.3s ease;
-    }
-
-    .footer.hidden-sidebar {
-        margin-left: 0;
-        width: 100%;
-    }
-
-    .sidebar-toggle-btn {
-        position: fixed;
-        top: 15px;
-        left: 235px; /* Adjust for larger screens */
-        z-index: 1100;
-        background: #159ed5;
-        color: #ffffff;
-        border: none;
-        border-radius: 50%;
-        width: 35px;
-        height: 35px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.1rem;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transition: left 0.3s ease, background 0.3s ease;
-    }
-
-    .sidebar-toggle-btn.hidden {
-        left: 15px;
-    }
-
-    .sidebar-toggle-btn:hover {
-        background: #1278a8;
-    }
-
-    /* Loading Indicator Styles */
-    .loader-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.9);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        visibility: hidden;
-        opacity: 0;
-        transition: opacity 0.2s ease, visibility 0s linear 0.2s;
-    }
-
-    .loader-overlay.active {
-        visibility: visible;
-        opacity: 1;
-        transition: opacity 0.2s ease, visibility 0s linear 0s;
-    }
-
-    .loader {
-        width: 100px;
-        height: 25px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .loader svg {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 200%;
-        height: 100%;
-        animation: moveWave 1.5s linear infinite;
-    }
-
-    .loader svg path {
-        stroke: #159ed5;
-        stroke-width: 2;
-        fill: none;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-    }
-
-    .loader .dot {
-        position: absolute;
-        top: 50%;
-        right: 0;
-        width: 5px;
-        height: 5px;
-        background: #159ed5;
-        border-radius: 50%;
-        transform: translateY(-50%);
-        animation: moveDot 1.5s linear infinite;
-    }
-
-    @keyframes moveWave {
-        0% {
-            transform: translateX(-50%);
-        }
-
-        100% {
-            transform: translateX(0%);
-        }
-    }
-
-    @keyframes moveDot {
-        0% {
-            transform: translateX(-100px) translateY(-50%);
-        }
-
-        100% {
-            transform: translateX(0) translateY(-50%);
-        }
-    }
-
-    /* Mobile-specific styles */
-    @media (max-width: 768px) {
-        .sidebar {
-            width: 220px; /* Full width for mobile sidebar when open */
-            transform: translateX(-220px); /* Initially hidden */
-            box-shadow: 2px 0 15px rgba(0, 0, 0, 0.2);
-        }
-
-        .sidebar.show {
-            transform: translateX(0); /* Show sidebar */
-        }
-
-        .sidebar .sidebar-header {
-            font-size: 1.8rem; /* Keep larger font for header */
-            padding: 20px 15px;
-        }
-
-        .sidebar a span,
-        .sidebar .submenu-indicator {
-            display: inline; /* Ensure text and indicators are visible on mobile sidebar */
-        }
-
-        .sidebar a i {
-            margin-right: 12px; /* Restore margin for icons */
-        }
-
-        .submenu {
-            display: none; /* Keep hidden by default */
-            padding-left: 30px; /* Indent submenus */
-        }
-
-        .submenu.show {
-            display: block !important; /* Allow submenus to show */
-        }
-
-        .main-content {
-            margin-left: 0; /* No margin on mobile */
-            width: 100%; /* Full width */
-            padding-top: 60px; /* Adjust for fixed navbar */
-        }
-
-        .main-content.hidden-sidebar,
-        .footer.hidden-sidebar {
-            margin-left: 0;
-            width: 100%;
         }
 
         .navbar {
-            left: 0;
-            width: 100%;
+            background: linear-gradient(90deg, #159ed5 0%, #159ed5 100%);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            position: fixed;
+            top: 0;
+            left: 220px;
+            width: calc(100% - 220px);
+            z-index: 1000;
+            transition: left 0.3s ease, width 0.3s ease;
+            padding: 0.5rem 1rem;
+            min-height: 50px;
         }
 
         .navbar.hidden-sidebar {
@@ -476,83 +47,529 @@
             width: 100%;
         }
 
+        .nav-link {
+            color: #ffffff !important;
+            font-weight: 500;
+            padding: 6px 12px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #e0e0e0 !important;
+            background-color: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+        }
+
+        .dropdown-submenu {
+            position: relative;
+        }
+
+        .dropdown-submenu .dropdown-menu {
+            top: 0;
+            right: 100%;
+            /* Show on the left instead of left: 100% */
+            left: auto;
+            margin-top: -1px;
+            display: none;
+        }
+
+        .dropdown-submenu:hover .dropdown-menu {
+            display: block;
+        }
+
+        /* Ensure dropdown menu is visible on click */
+        .dropdown-submenu .dropdown-menu.show {
+            display: block;
+        }
+
+        /* Responsive for mobile – keep same */
+        @media (max-width: 768px) {
+            .dropdown-submenu .dropdown-menu {
+                left: 0;
+                position: relative;
+                margin-left: 20px;
+            }
+        }
+
+
+        .sidebar {
+            width: 220px;
+            height: 100vh;
+            background: #ffffff;
+            position: fixed;
+            top: 0;
+            left: 0;
+            box-shadow: 2px 0 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+            z-index: 900;
+            overflow-y: auto;
+            padding: 20px 10px;
+        }
+
+        .sidebar.hidden {
+            transform: translateX(-220px);
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #159ed5;
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: #f4f7fa;
+        }
+
+        .sidebar .sidebar-header {
+            padding: 20px 15px;
+            text-align: center;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: #159ed5;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #ffffff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar ul {
+            padding: 10px 0;
+            margin: 0;
+        }
+
+        .sidebar a {
+            color: #333;
+            padding: 12px 15px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border-radius: 0 25px 25px 0;
+        }
+
+        .sidebar a i {
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+            color: #159ed5;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar a:hover {
+            background: linear-gradient(to right, #e6eef5, #f0f5fa);
+            color: #159ed5;
+            margin-right: 5px;
+        }
+
+        .sidebar a:hover i {
+            color: #159ed5;
+            transform: scale(1.1);
+        }
+
+        .sidebar a.active {
+            background: linear-gradient(to right, rgb(127, 207, 238), rgb(115, 196, 233));
+            color: #ffffff;
+            margin-right: 5px;
+            font-weight: 600;
+        }
+
+        .sidebar a.active i {
+            color: #ffffff;
+        }
+
+        .has-submenu .submenu-toggle {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            padding-right: 10px;
+        }
+
+        .has-submenu .menu-text {
+            flex-grow: 1;
+        }
+
+        .submenu-indicator {
+            font-size: 0.8rem;
+            transition: transform 0.3s ease;
+            color: #159ed5;
+        }
+
+        .has-submenu .submenu-toggle.active .submenu-indicator {
+            transform: rotate(180deg);
+            color: #ffffff;
+        }
+
+        .submenu {
+            display: none;
+            list-style: none;
+            padding-left: 30px;
+            margin: 5px 0;
+            background: #f9fafb;
+            border-left: 2px solid #e0e0e0;
+        }
+
+        .submenu.show {
+            display: block;
+        }
+
+        .submenu li a {
+            padding: 8px 15px;
+            color: #495057;
+            font-size: 0.9rem;
+            font-weight: 400;
+            transition: all 0.3s ease;
+            background: none;
+            border-radius: 5px;
+        }
+
+        .submenu li a i {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .submenu li a:hover,
+        .submenu li a.active {
+            color: #159ed5;
+            background: #e9ecef;
+            padding-left: 20px;
+        }
+
+        .submenu li a:hover i,
+        .submenu li a.active i {
+            color: #159ed5;
+            transform: none;
+        }
+
+        .main-content {
+            margin-left: 220px;
+            padding: 20px;
+            padding-top: 30px;
+            min-height: 100vh;
+            background: #f4f7fa;
+            transition: margin-left 0.3s ease;
+        }
+
+        .main-content.hidden-sidebar {
+            margin-left: 0;
+        }
+
+        .alert-panel {
+            margin-top: 70px;
+            margin-left: 250px;
+            padding-top: 20px;
+            margin-right: 20px;
+            margin-bottom: 0px;
+            transition: margin-left 0.3s ease;
+        }
+
+        .alert-panel.hidden-sidebar {
+            margin-left: 0;
+        }
+
+        .widget {
+            background: #ffffff;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        .widget h3 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .widget p {
+            font-size: 1.6rem;
+            font-weight: 500;
+            color: #159ed5;
+            margin: 0;
+        }
+
+        .footer {
+            background: #ffffff;
+            color: #555;
+            text-align: center;
+            padding: 20px 0;
+            width: calc(100% - 220px);
+            margin-left: 220px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+            transition: margin-left 0.3s ease, width 0.3s ease;
+        }
+
+        .footer.hidden-sidebar {
+            margin-left: 0;
+            width: 100%;
+        }
+
         .sidebar-toggle-btn {
-            left: 15px; /* Position button at top-left */
+            position: fixed;
             top: 15px;
-            z-index: 1001; /* Above navbar for easy access */
+            left: 235px;
+            /* Adjust for larger screens */
+            z-index: 1100;
+            background: #159ed5;
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: left 0.3s ease, background 0.3s ease;
         }
 
         .sidebar-toggle-btn.hidden {
             left: 15px;
         }
 
-        .alert-panel {
-            margin-left: 20px; /* Adjust for full-width content */
-            margin-right: 20px;
+        .sidebar-toggle-btn:hover {
+            background: #1278a8;
         }
 
-        .loader {
-            width: 80px;
-            height: 20px;
-        }
-
-        .loader .dot {
-            width: 4px;
-            height: 4px;
-        }
-
-        .overlay {
+        /* Loading Indicator Styles */
+        .loader-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 899; /* Below sidebar, above main content */
-            display: none;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s ease, visibility 0s linear 0.2s;
         }
 
-        body.no-scroll {
+        .loader-overlay.active {
+            visibility: visible;
+            opacity: 1;
+            transition: opacity 0.2s ease, visibility 0s linear 0s;
+        }
+
+        .loader {
+            width: 100px;
+            height: 25px;
+            position: relative;
             overflow: hidden;
         }
-    }
 
-    .table-responsive {
-        visibility: hidden;
-        opacity: 0;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
-    }
+        .loader svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200%;
+            height: 100%;
+            animation: moveWave 1.5s linear infinite;
+        }
 
-    .table-responsive.loaded {
-        visibility: visible;
-        opacity: 1;
-    }
+        .loader svg path {
+            stroke: #159ed5;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
 
-    .stylish-alert-btn {
-        background-color: #159ed5;
-        color: white;
-        border: none;
-        padding: 8px 18px;
-        border-radius: 30px;
-        font-size: 16px;
-        font-weight: 600;
-        box-shadow: none;
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
+        .loader .dot {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            width: 5px;
+            height: 5px;
+            background: #159ed5;
+            border-radius: 50%;
+            transform: translateY(-50%);
+            animation: moveDot 1.5s linear infinite;
+        }
 
-    .stylish-alert-btn:hover {
-        background-color: #117aa2;
-        color: #fff;
-        transform: scale(1.05);
-        box-shadow: 0 6px 12px rgba(21, 158, 213, 0.5);
-    }
+        @keyframes moveWave {
+            0% {
+                transform: translateX(-50%);
+            }
 
-    .stylish-alert-btn:focus {
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(21, 158, 213, 0.3);
-    }
-</style>
+            100% {
+                transform: translateX(0%);
+            }
+        }
+
+        @keyframes moveDot {
+            0% {
+                transform: translateX(-100px) translateY(-50%);
+            }
+
+            100% {
+                transform: translateX(0) translateY(-50%);
+            }
+        }
+
+        /* Mobile-specific styles */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 220px;
+                /* Full width for mobile sidebar when open */
+                transform: translateX(-220px);
+                /* Initially hidden */
+                box-shadow: 2px 0 15px rgba(0, 0, 0, 0.2);
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+                /* Show sidebar */
+            }
+
+            .sidebar .sidebar-header {
+                font-size: 1.8rem;
+                /* Keep larger font for header */
+                padding: 20px 15px;
+            }
+
+            .sidebar a span,
+            .sidebar .submenu-indicator {
+                display: inline;
+                /* Ensure text and indicators are visible on mobile sidebar */
+            }
+
+            .sidebar a i {
+                margin-right: 12px;
+                /* Restore margin for icons */
+            }
+
+            .submenu {
+                display: none;
+                /* Keep hidden by default */
+                padding-left: 30px;
+                /* Indent submenus */
+            }
+
+            .submenu.show {
+                display: block !important;
+                /* Allow submenus to show */
+            }
+
+            .main-content {
+                margin-left: 0;
+                /* No margin on mobile */
+                width: 100%;
+                /* Full width */
+                padding-top: 60px;
+                /* Adjust for fixed navbar */
+            }
+
+            .main-content.hidden-sidebar,
+            .footer.hidden-sidebar {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            .navbar {
+                left: 0;
+                width: 100%;
+            }
+
+            .navbar.hidden-sidebar {
+                left: 0;
+                width: 100%;
+            }
+
+            .sidebar-toggle-btn {
+                left: 15px;
+                /* Position button at top-left */
+                top: 15px;
+                z-index: 1001;
+                /* Above navbar for easy access */
+            }
+
+            .sidebar-toggle-btn.hidden {
+                left: 15px;
+            }
+
+            .alert-panel {
+                margin-left: 20px;
+                /* Adjust for full-width content */
+                margin-right: 20px;
+            }
+
+            .loader {
+                width: 80px;
+                height: 20px;
+            }
+
+            .loader .dot {
+                width: 4px;
+                height: 4px;
+            }
+
+            .overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 899;
+                /* Below sidebar, above main content */
+                display: none;
+            }
+
+            body.no-scroll {
+                overflow: hidden;
+            }
+        }
+
+        .table-responsive {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .table-responsive.loaded {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .stylish-alert-btn {
+            background-color: #159ed5;
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .stylish-alert-btn:hover {
+            background-color: #117aa2;
+            color: #fff;
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(21, 158, 213, 0.5);
+        }
+
+        .stylish-alert-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(21, 158, 213, 0.3);
+        }
+    </style>
     <script>
         // Show loader immediately on page load
         (function() {
@@ -611,11 +628,11 @@
                                     href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">Change
                                     Password</a>
                             </li>
-                            @if(count(Auth::guard('booking')->user()->switchable_branches ?? []) > 1)
+                            @if(is_array(Auth::guard('booking')->user()->switchable_branches) && count(Auth::guard('booking')->user()->switchable_branches) > 1)
                             <li class="dropdown-submenu">
                                 <a class="dropdown-item dropdown-toggle" href="#" data-bs-toggle="dropdown">Switch Branch</a>
                                 <ul class="dropdown-menu">
-                                    @foreach(Auth::guard('booking')->user()->switchable_branches ?? [] as $branch)
+                                    @foreach(Auth::guard('booking')->user()->switchable_branches as $branch)
                                     <li>
                                         <form action="{{ route('booking.switch-branch') }}" method="POST">
                                             @csrf
@@ -648,16 +665,13 @@
             </div>
         </div>
     </nav>
-    @if($alertsCount)
+    @if(isset($alertsCount) && is_numeric($alertsCount) && $alertsCount > 0)
     <h5 class="alert-panel alert alert-danger">
         <i class="fas fa-exclamation-triangle"></i>
         You have {{ $alertsCount }} important {{ $alertsCount == 1 ? 'alert' : 'alerts' }},
         click <a href="{{ route('booking.alerts') }}" class="text-primary text-decoration-underline">here</a> to view.
     </h5>
-    @endif
-    <div id="react-alert-root" data-alerts-count="{{ $alertsCount }}" data-alerts-route="{{ route('booking.alerts') }}">
-    </div>
-
+@endif
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">DMS</div>
@@ -802,17 +816,6 @@
                             <li><a href="{{ route('booking.delivery_log') }}"><i class="fas fa-clipboard-list"></i> Delivery Log</a></li>
                         </ul>
                     </li>
-                    <!-- <li class="nav-item"><a class="{{ Request::is('booking/reminders*') ? 'active' : '' }}"
-                            href="{{ route('booking.reminders') }}">
-                            <i class="fas fa-bell me-2"></i> Reminders
-                            @if(isset($reminderCount) && $reminderCount > 0)
-                            <span class="badge rounded-pill ms-2" id="reminderAlert"
-                                style="background-color: #e53935; color: white;">
-                                {{ $reminderCount }}
-                            </span>
-                            @endif
-                        </a>
-                    </li> -->
                 </ul>
             </li>
             <li class="nav-item">
