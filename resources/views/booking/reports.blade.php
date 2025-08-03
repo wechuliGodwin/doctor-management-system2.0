@@ -76,6 +76,22 @@
         box-shadow: 0 0 0 2px rgba(21, 158, 213, 0.1);
     }
 
+    .select2-container .select2-selection--single {
+        height: 38px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 38px;
+        padding-left: 10px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 38px;
+    }
+
     .export-buttons {
         display: flex;
         gap: 8px;
@@ -128,11 +144,12 @@
         font-weight: 600;
         color: #1e293b;
         margin-bottom: 16px;
+        text-align: center;
     }
 
     .chart-container {
         position: relative;
-        height: 400px;
+        height: 350px;
         width: 100%;
         margin-bottom: 16px;
     }
@@ -151,9 +168,7 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.9rem;
-        max-height: 400px;
-        overflow-y: auto;
-        display: block;
+        table-layout: auto;
     }
 
     .data-table th,
@@ -161,7 +176,7 @@
         padding: 10px;
         text-align: left;
         border-bottom: 1px solid #e2e8f0;
-        min-width: 100px;
+        white-space: nowrap;
     }
 
     .data-table th {
@@ -171,10 +186,24 @@
         position: sticky;
         top: 0;
         z-index: 1;
+        text-align: center;
     }
 
     .data-table td {
         vertical-align: middle;
+        text-align: center;
+    }
+
+    .data-table .specialization-column {
+        position: sticky;
+        left: 0;
+        background: white;
+        z-index: 2;
+        text-align: left;
+        min-width: 120px;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .data-table tfoot {
@@ -184,6 +213,11 @@
 
     .data-table tr:hover {
         background: #f1f5f9;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        max-height: 400px;
     }
 
     .section-header {
@@ -199,6 +233,7 @@
         font-size: 1.4rem;
         font-weight: 600;
         margin-bottom: 4px;
+        text-align: center;
     }
 
     .section-description {
@@ -225,14 +260,71 @@
             grid-template-columns: 1fr;
         }
 
+        .chart-container {
+            height: 300px;
+        }
+
+        .data-table {
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
         .data-table th,
         .data-table td {
             min-width: 80px;
+            font-size: 0.8rem;
+            padding: 8px;
+        }
+
+        .data-table .specialization-column {
+            min-width: 100px;
+            max-width: 120px;
         }
     }
 
-    #customDateRange {
-        display: none;
+    @media (max-width: 576px) {
+        .data-table {
+            display: block;
+        }
+
+        .data-table thead {
+            display: none;
+        }
+
+        .data-table tbody tr {
+            display: block;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .data-table tbody td {
+            display: block;
+            text-align: left;
+            padding: 8px;
+            position: relative;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .data-table tbody td:before {
+            content: attr(data-label);
+            font-weight: 600;
+            display: inline-block;
+            width: 40%;
+            padding-right: 10px;
+            color: #1e293b;
+        }
+
+        .data-table .specialization-column {
+            position: static;
+            background: #f8fafc;
+            font-weight: 600;
+            max-width: none;
+        }
+
+        .data-table tfoot {
+            display: none;
+        }
     }
 </style>
 
@@ -271,10 +363,10 @@
                 @endif
                 <div class="filter-group">
                     <label for="specialization">Specialization</label>
-                    <select id="specialization" name="specialization">
+                    <select id="specialization" name="specialization" class="select2">
                         <option value="">All Specializations</option>
                         @foreach ($specializations as $specialization)
-                        <option value="{{ $specialization->id }}" {{ $selectedSpecialization == $specialization->id ? 'selected' : '' }}>{{ $specialization->name }}</option>
+                        <option value="{{ $specialization->id }}" {{ $selectedSpecialization == $specialization->id ? 'selected' : '' }}>{{ $isSuperadmin ? $specialization->display_name : $specialization->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -305,43 +397,56 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Specialization</th>
-                            <th>Total Appointments</th>
-                            <th>Confirmed (Pending)</th>
-                            <th>Patients Seen</th>
+                            <th class="specialization-column">Specialization</th>
+                            <th>Total</th>
+                            <th>Confirmed</th>
+                            <th>Seen</th>
+                            <th>HMIS</th>
                             <th>Missed</th>
                             <th>Cancelled</th>
                             <th>Rescheduled</th>
-                            <th>Pending External Approvals</th>
-                            <th>External Approved</th>
+                            @php
+                            $user = Auth::guard('booking')->user();
+                            $selectedBranch = session('selected_branch', $user ? $user->hospital_branch : null);
+                            @endphp
+                            @if ($selectedBranch === 'kijabe')
+                            <th>Pending Approval</th>
+                            <th>Approved</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($specializationData as $data)
                         <tr>
-                            <td>{{ $data->specialization_name }}</td>
-                            <td>{{ $data->total_appointments }}</td>
-                            <td>{{ $data->confirmed_pending }}</td>
-                            <td>{{ $data->patients_seen }}</td>
-                            <td>{{ $data->missed }}</td>
-                            <td>{{ $data->cancelled }}</td>
-                            <td>{{ $data->rescheduled }}</td>
-                            <td>{{ $data->pending_external_approvals }}</td>
-                            <td>{{ $data->external_approved }}</td>
+                            <td class="specialization-column" data-label="Specialization">{{ \Illuminate\Support\Str::limit($data->specialization_name, 10, '...') }}</td>
+                            <td data-label="Total">{{ $data->total_appointments }}</td>
+                            <td data-label="Confirmed">{{ $data->confirmed_pending }}</td>
+                            <td data-label="Seen">{{ $data->patients_seen }}</td>
+                            <td data-label="HMIS">{{ $data->hmis_honoured }}</td>
+                            <td data-label="Missed">{{ $data->missed }}</td>
+                            <td data-label="Cancelled">{{ $data->cancelled }}</td>
+                            <td data-label="Rescheduled">{{ $data->rescheduled }}</td>
+                            @if ($selectedBranch === 'kijabe')
+                            <td data-label="Pending Approval">{{ $data->pending_external_approvals }}</td>
+                            <td data-label="Approved">{{ $data->external_approved }}</td>
+                            @endif
                         </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr>
-                            <td><strong>Total</strong></td>
+                            <td class="specialization-column"><strong>Total</strong></td>
                             <td><strong>{{ $specializationData->sum('total_appointments') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('confirmed_pending') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('patients_seen') }}</strong></td>
+                            <td><strong>{{ $specializationData->sum('hmis_honoured') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('missed') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('cancelled') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('rescheduled') }}</strong></td>
+                            @if ($selectedBranch === 'kijabe')
                             <td><strong>{{ $specializationData->sum('pending_external_approvals') }}</strong></td>
                             <td><strong>{{ $specializationData->sum('external_approved') }}</strong></td>
+                            @endif
                         </tr>
                     </tfoot>
                 </table>
@@ -384,19 +489,23 @@
                             <th>No Response %</th>
                             <th>Other</th>
                             <th>Other %</th>
+                            <th>HMIS Honoured</th>
+                            <th>HMIS Honoured %</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($branchData as $data)
                         <tr>
-                            <td>{{ ucfirst($data->hospital_branch) }}</td>
-                            <td>{{ $data->total_bookings }}</td>
-                            <td>{{ $data->traced_contacted }}</td>
-                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_contacted / $data->total_bookings) * 100, 1) : 0 }}%</td>
-                            <td>{{ $data->traced_no_response }}</td>
-                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_no_response / $data->total_bookings) * 100, 1) : 0 }}%</td>
-                            <td>{{ $data->traced_other }}</td>
-                            <td>{{ $data->total_bookings > 0 ? number_format(($data->traced_other / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td data-label="Branch">{{ ucfirst($data->hospital_branch) }}</td>
+                            <td data-label="Total Bookings">{{ $data->total_bookings }}</td>
+                            <td data-label="Contacted">{{ $data->traced_contacted }}</td>
+                            <td data-label="Contacted %">{{ $data->total_bookings > 0 ? number_format(($data->traced_contacted / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td data-label="No Response">{{ $data->traced_no_response }}</td>
+                            <td data-label="No Response %">{{ $data->total_bookings > 0 ? number_format(($data->traced_no_response / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td data-label="Other">{{ $data->traced_other }}</td>
+                            <td data-label="Other %">{{ $data->total_bookings > 0 ? number_format(($data->traced_other / $data->total_bookings) * 100, 1) : 0 }}%</td>
+                            <td data-label="HMIS Honoured">{{ $data->hmis_honoured }}</td>
+                            <td data-label="HMIS Honoured %">{{ $data->total_bookings > 0 ? number_format(($data->hmis_honoured / $data->total_bookings) * 100, 1) : 0 }}%</td>
                         </tr>
                         @endforeach
                     </tbody>
@@ -410,6 +519,8 @@
                             <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('traced_no_response') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
                             <td><strong>{{ $branchData->sum('traced_other') }}</strong></td>
                             <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('traced_other') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
+                            <td><strong>{{ $branchData->sum('hmis_honoured') }}</strong></td>
+                            <td><strong>{{ $branchData->sum('total_bookings') > 0 ? number_format(($branchData->sum('hmis_honoured') / $branchData->sum('total_bookings')) * 100, 1) : 0 }}%</strong></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -420,9 +531,36 @@
     @endif
 </div>
 
+<!-- jQuery CDN -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Select2 CDN -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
+    // Debug: Check if jQuery is loaded
+    if (typeof jQuery === 'undefined') {
+        console.error('jQuery is not loaded. Ensure the jQuery CDN is accessible.');
+    } else {
+        console.log('jQuery loaded successfully, version:', jQuery.fn.jquery);
+    }
+
+    // Initialize Select2 for specialization dropdown
+    jQuery(document).ready(function() {
+        if (jQuery.fn.select2) {
+            jQuery('#specialization').select2({
+                placeholder: "Select a specialization",
+                allowClear: true,
+                width: '100%'
+            });
+            console.log('Select2 initialized successfully');
+        } else {
+            console.error('Select2 is not loaded. Ensure the Select2 CDN is accessible.');
+        }
+    });
+
     // Debug: Check if Chart.js is loaded
     if (typeof Chart === 'undefined') {
         console.error('Chart.js library is not loaded. Ensure the CDN is accessible.');
@@ -443,7 +581,7 @@
     toggleCustomDateRange();
 
     // Specialization Performance Chart (Top 10)
-    @if(!$specializationData -> isEmpty())
+    @if(!$specializationData->isEmpty())
     const chartData = @json($chartData);
     console.log('Specialization Chart Data:', chartData);
 
@@ -454,11 +592,30 @@
                 type: 'bar',
                 data: {
                     labels: chartData.labels,
-                    datasets: chartData.datasets.map(dataset => ({
+                    datasets: chartData.datasets.map((dataset, index) => ({
                         ...dataset,
-                        maxBarThickness: 60,
-                        barPercentage: 0.9,
-                        categoryPercentage: 0.8
+                        backgroundColor: [
+                            'rgba(21, 158, 213, 0.7)',  // Blue
+                            'rgba(255, 99, 132, 0.7)',  // Red
+                            'rgba(54, 162, 235, 0.7)',  // Light Blue
+                            'rgba(255, 206, 86, 0.7)',  // Yellow
+                            'rgba(75, 192, 192, 0.7)',  // Teal
+                            'rgba(153, 102, 255, 0.7)', // Purple
+                            'rgba(255, 159, 64, 0.7)'   // Orange
+                        ][index % 7],
+                        borderColor: [
+                            'rgba(21, 158, 213, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ][index % 7],
+                        borderWidth: 1,
+                        maxBarThickness: 40,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.9
                     })),
                 },
                 options: {
@@ -467,19 +624,41 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Number of Appointments'
+                                text: 'Number of Appointments',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                }
                             }
                         },
                         x: {
                             title: {
                                 display: true,
-                                text: '{{ $selectedSpecialization ? "Metrics for Selected Specialization" : "Top 10 Specializations" }}'
+                                text: '{{ $selectedSpecialization ? "Metrics for Selected Specialization" : "Top 10 Specializations" }}',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
                             },
                             ticks: {
                                 maxRotation: 45,
                                 minRotation: 45,
                                 autoSkip: false,
-                                maxTicksLimit: 10
+                                font: {
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                display: false
                             }
                         }
                     },
@@ -487,14 +666,33 @@
                         legend: {
                             display: true,
                             position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 20,
+                                padding: 15
+                            }
                         },
                         tooltip: {
                             mode: 'index',
                             intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleFont: {
+                                size: 12
+                            },
+                            bodyFont: {
+                                size: 11
+                            },
+                            padding: 10
                         }
                     },
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
                 }
             });
             console.log('Specialization Performance Chart initialized successfully');
@@ -520,7 +718,14 @@
                 type: 'line',
                 data: {
                     labels: dailyBookingChartData.labels,
-                    datasets: dailyBookingChartData.datasets,
+                    datasets: dailyBookingChartData.datasets.map(dataset => ({
+                        ...dataset,
+                        backgroundColor: 'rgba(21, 158, 213, 0.2)',
+                        borderColor: 'rgba(21, 158, 213, 1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    })),
                 },
                 options: {
                     scales: {
@@ -528,19 +733,42 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Number of Bookings'
+                                text: 'Number of Bookings',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                }
                             }
                         },
                         x: {
                             title: {
                                 display: true,
-                                text: 'Date'
+                                text: 'Date',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
                             },
                             ticks: {
                                 maxRotation: 45,
                                 minRotation: 45,
                                 autoSkip: true,
-                                maxTicksLimit: 10
+                                maxTicksLimit: 10,
+                                font: {
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                display: false
                             }
                         }
                     },
@@ -548,14 +776,33 @@
                         legend: {
                             display: true,
                             position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 20,
+                                padding: 15
+                            }
                         },
                         tooltip: {
                             mode: 'index',
                             intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleFont: {
+                                size: 12
+                            },
+                            bodyFont: {
+                                size: 11
+                            },
+                            padding: 10
                         }
                     },
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
                 }
             });
             console.log('Daily Booking Rate Chart initialized successfully');
@@ -570,7 +817,7 @@
     @endif
 
     // Branch Chart (Superadmins Only)
-    @if($isSuperadmin && !$branchData -> isEmpty())
+    @if($isSuperadmin && !$branchData->isEmpty())
     const branchChartData = @json($branchChartData);
     console.log('Branch Chart Data:', branchChartData);
 
@@ -581,7 +828,24 @@
                 type: 'bar',
                 data: {
                     labels: branchChartData.labels,
-                    datasets: branchChartData.datasets,
+                    datasets: branchChartData.datasets.map((dataset, index) => ({
+                        ...dataset,
+                        backgroundColor: [
+                            'rgba(21, 158, 213, 0.7)',
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)'
+                        ][index % 5],
+                        borderColor: [
+                            'rgba(21, 158, 213, 1)',
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)'
+                        ][index % 5],
+                        borderWidth: 1
+                    })),
                 },
                 options: {
                     scales: {
@@ -589,13 +853,38 @@
                             beginAtZero: true,
                             title: {
                                 display: true,
-                                text: 'Number of Bookings'
+                                text: 'Number of Bookings',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1
+                            },
+                            ticks: {
+                                font: {
+                                    size: 12
+                                }
                             }
                         },
                         x: {
                             title: {
                                 display: true,
-                                text: 'Hospital Branch'
+                                text: 'Hospital Branch',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            ticks: {
+                                font: {
+                                    size: 10
+                                }
+                            },
+                            grid: {
+                                display: false
                             }
                         }
                     },
@@ -603,14 +892,33 @@
                         legend: {
                             display: true,
                             position: 'top',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                boxWidth: 20,
+                                padding: 15
+                            }
                         },
                         tooltip: {
                             mode: 'index',
                             intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleFont: {
+                                size: 12
+                            },
+                            bodyFont: {
+                                size: 11
+                            },
+                            padding: 10
                         }
                     },
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
                 }
             });
             console.log('Branch Chart initialized successfully');

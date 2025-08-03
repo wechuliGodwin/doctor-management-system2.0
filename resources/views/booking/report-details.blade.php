@@ -327,8 +327,6 @@
                         <option value="missed" {{ $status === 'missed' ? 'selected' : '' }}>Missed</option>
                         <option value="cancelled" {{ $status === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
                         <option value="rescheduled" {{ $status === 'rescheduled' ? 'selected' : '' }}>Rescheduled</option>
-                        <!-- <option value="external_pending" {{ $status === 'external_pending' ? 'selected' : '' }}>Pending External</option>
-                        <option value="external_approved" {{ $status === 'external_approved' ? 'selected' : '' }}>External Approved</option> -->
                     </select>
                 </div>
 
@@ -376,7 +374,7 @@
                         <option value="new" {{ $bookingType === 'new' ? 'selected' : '' }}>New Patients</option>
                         <option value="review" {{ $bookingType === 'review' ? 'selected' : '' }}>Review Patients</option>
                         <option value="post_op" {{ $bookingType === 'post_op' ? 'selected' : '' }}>Post-Op Patients</option>
-                        @if ($isSuperadmin || Auth::guard('booking')->user()->hospital_branch === 'kijabe')
+                        @if ($isSuperadmin ||  Auth::guard('booking')->user()->hospital_branch === 'kijabe')
                         <option value="external_approved" {{ $bookingType === 'external_approved' ? 'selected' : '' }}>External Approved </option>
                         <option value="external_pending" {{ $bookingType === 'external_pending' ? 'selected' : '' }}>Pending External</option>
                         @endif

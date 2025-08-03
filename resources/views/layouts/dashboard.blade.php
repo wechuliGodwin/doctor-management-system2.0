@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>DMS - @yield('title')</title>
+    <title>Booking System - @yield('title')</title>
     <!-- Preload Critical Resources -->
     <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style">
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style">
@@ -18,7 +18,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 
     <style>
         body {
@@ -34,23 +33,29 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             position: fixed;
             top: 0;
-            left: 220px;
-            width: calc(100% - 220px);
-            z-index: 1000;
-            transition: left 0.3s ease, width 0.3s ease;
-            padding: 0.5rem 1rem;
-            min-height: 50px;
-        }
-
-        .navbar.hidden-sidebar {
             left: 0;
             width: 100%;
+            z-index: 1000;
+            padding: 0.75rem 1rem;
+            min-height: 60px;
+            max-height: 70px;
+        }
+
+        .navbar-brand {
+            color: #ffffff !important;
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-right: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .nav-link {
             color: #ffffff !important;
             font-weight: 500;
-            padding: 6px 12px;
+            padding: 0.5rem 1rem;
             transition: all 0.3s ease;
         }
 
@@ -60,37 +65,158 @@
             border-radius: 8px;
         }
 
-        .dropdown-submenu {
-            position: relative;
+        .dropdown-menu {
+            background: #159ed5;
+            border: none;
+            border-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
         }
 
-        .dropdown-submenu .dropdown-menu {
-            top: 0;
-            right: 100%;
-            /* Show on the left instead of left: 100% */
-            left: auto;
-            margin-top: -1px;
-            display: none;
+        .dropdown-item {
+            color: #ffffff !important;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
         }
 
-        .dropdown-submenu:hover .dropdown-menu {
-            display: block;
+        .dropdown-item:hover {
+            background-color: rgba(255, 255, 255, 0.2) !important;
+            color: #e0e0e0 !important;
         }
 
-        /* Ensure dropdown menu is visible on click */
-        .dropdown-submenu .dropdown-menu.show {
-            display: block;
-        }
-
-        /* Responsive for mobile – keep same */
         @media (max-width: 768px) {
-            .dropdown-submenu .dropdown-menu {
-                left: 0;
-                position: relative;
-                margin-left: 20px;
+            .navbar {
+                padding: 1rem;
+                min-height: 70px;
+                max-height: 70px;
+            }
+
+            .navbar-brand {
+                font-size: 1.2rem;
+                max-width: 100px;
+                margin-bottom: 0.5rem;
+            }
+
+            .sidebar-toggle-btn {
+                display: flex;
+                position: absolute;
+                top: 12px;
+                left: 1rem;
+                z-index: 1002;
+                background: #159ed5;
+                color: #ffffff;
+                border: none;
+                border-radius: 50%;
+                width: 35px;
+                height: 35px;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+
+            .profile-toggle-btn {
+                display: flex;
+                position: absolute;
+                top: 12px;
+                right: 1rem;
+                z-index: 1001;
+                background: #159ed5;
+                color: #ffffff;
+                border: none;
+                border-radius: 50%;
+                width: 35px;
+                height: 35px;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            }
+
+            .dropdown-menu {
+                position: absolute;
+                top: 100%;
+                right: 0;
+                left: auto;
+                width: 200px;
+                margin-top: 0.5rem;
+            }
+
+            .sidebar .user-info {
+                display: flex;
+                align-items: center;
+                color: #333;
+                font-weight: 500;
+                font-size: 0.9rem;
+                padding: 10px 15px;
+                background: #f9fafb;
+                margin: 10px 0;
+                border-radius: 5px;
+            }
+
+            .sidebar .user-info i {
+                font-size: 1.2rem;
+                margin-right: 0.5rem;
+                color: #159ed5;
+                background: rgba(21, 158, 213, 0.2);
+                padding: 0.3rem;
+                border-radius: 50%;
             }
         }
 
+        @media (min-width: 769px) {
+            .navbar {
+                left: 220px;
+                width: calc(100% - 220px);
+            }
+
+            .sidebar-toggle-btn,
+            .profile-toggle-btn {
+                display: none;
+            }
+
+            .navbar-nav {
+                align-items: center;
+            }
+
+            .user-info {
+                display: flex;
+                align-items: center;
+                color: #ffffff;
+                font-weight: 500;
+                font-size: 0.9rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 500px;
+            }
+
+            .user-info i {
+                font-size: 1.2rem;
+                margin-right: 0.5rem;
+                color: #ffffff;
+                background: rgba(255, 255, 255, 0.2);
+                padding: 0.3rem;
+                border-radius: 50%;
+            }
+
+            .dropdown-submenu {
+                position: relative;
+            }
+
+            .dropdown-submenu .dropdown-menu {
+                top: 0;
+                right: 100%;
+                left: auto;
+                margin-top: -1px;
+            }
+
+            .dropdown-submenu:hover .dropdown-menu {
+                display: block;
+            }
+        }
 
         .sidebar {
             width: 220px;
@@ -100,14 +226,9 @@
             top: 0;
             left: 0;
             box-shadow: 2px 0 15px rgba(0, 0, 0, 0.08);
-            transition: transform 0.3s ease;
             z-index: 900;
             overflow-y: auto;
             padding: 20px 10px;
-        }
-
-        .sidebar.hidden {
-            transform: translateX(-220px);
         }
 
         .sidebar::-webkit-scrollbar {
@@ -251,23 +372,17 @@
         .main-content {
             margin-left: 220px;
             padding: 20px;
-            padding-top: 30px;
+            padding-top: 80px;
             min-height: 100vh;
             background: #f4f7fa;
-            transition: margin-left 0.3s ease;
-        }
-
-        .main-content.hidden-sidebar {
-            margin-left: 0;
         }
 
         .alert-panel {
-            margin-top: 70px;
+            margin-top: 80px;
             margin-left: 250px;
             padding-top: 20px;
             margin-right: 20px;
             margin-bottom: 0px;
-            transition: margin-left 0.3s ease;
         }
 
         .alert-panel.hidden-sidebar {
@@ -304,44 +419,8 @@
             width: calc(100% - 220px);
             margin-left: 220px;
             box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
-            transition: margin-left 0.3s ease, width 0.3s ease;
         }
 
-        .footer.hidden-sidebar {
-            margin-left: 0;
-            width: 100%;
-        }
-
-        .sidebar-toggle-btn {
-            position: fixed;
-            top: 15px;
-            left: 235px;
-            /* Adjust for larger screens */
-            z-index: 1100;
-            background: #159ed5;
-            color: #ffffff;
-            border: none;
-            border-radius: 50%;
-            width: 35px;
-            height: 35px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            transition: left 0.3s ease, background 0.3s ease;
-        }
-
-        .sidebar-toggle-btn.hidden {
-            left: 15px;
-        }
-
-        .sidebar-toggle-btn:hover {
-            background: #1278a8;
-        }
-
-        /* Loading Indicator Styles */
         .loader-overlay {
             position: fixed;
             top: 0;
@@ -401,110 +480,59 @@
         }
 
         @keyframes moveWave {
-            0% {
-                transform: translateX(-50%);
-            }
-
-            100% {
-                transform: translateX(0%);
-            }
+            0% { transform: translateX(-50%); }
+            100% { transform: translateX(0%); }
         }
 
         @keyframes moveDot {
-            0% {
-                transform: translateX(-100px) translateY(-50%);
-            }
-
-            100% {
-                transform: translateX(0) translateY(-50%);
-            }
+            0% { transform: translateX(-100px) translateY(-50%); }
+            100% { transform: translateX(0) translateY(-50%); }
         }
 
-        /* Mobile-specific styles */
         @media (max-width: 768px) {
             .sidebar {
-                width: 220px;
-                /* Full width for mobile sidebar when open */
-                transform: translateX(-220px);
-                /* Initially hidden */
+                width: 100%;
+                transform: translateX(-100%);
                 box-shadow: 2px 0 15px rgba(0, 0, 0, 0.2);
+                transition: transform 0.3s ease;
             }
 
             .sidebar.show {
                 transform: translateX(0);
-                /* Show sidebar */
             }
 
             .sidebar .sidebar-header {
-                font-size: 1.8rem;
-                /* Keep larger font for header */
-                padding: 20px 15px;
+                padding: 1rem;
             }
 
             .sidebar a span,
             .sidebar .submenu-indicator {
                 display: inline;
-                /* Ensure text and indicators are visible on mobile sidebar */
             }
 
             .sidebar a i {
                 margin-right: 12px;
-                /* Restore margin for icons */
             }
 
             .submenu {
                 display: none;
-                /* Keep hidden by default */
                 padding-left: 30px;
-                /* Indent submenus */
             }
 
             .submenu.show {
                 display: block !important;
-                /* Allow submenus to show */
             }
 
             .main-content {
                 margin-left: 0;
-                /* No margin on mobile */
                 width: 100%;
-                /* Full width */
-                padding-top: 60px;
-                /* Adjust for fixed navbar */
-            }
-
-            .main-content.hidden-sidebar,
-            .footer.hidden-sidebar {
-                margin-left: 0;
-                width: 100%;
-            }
-
-            .navbar {
-                left: 0;
-                width: 100%;
-            }
-
-            .navbar.hidden-sidebar {
-                left: 0;
-                width: 100%;
-            }
-
-            .sidebar-toggle-btn {
-                left: 15px;
-                /* Position button at top-left */
-                top: 15px;
-                z-index: 1001;
-                /* Above navbar for easy access */
-            }
-
-            .sidebar-toggle-btn.hidden {
-                left: 15px;
+                padding-top: 80px;
             }
 
             .alert-panel {
-                margin-left: 20px;
-                /* Adjust for full-width content */
-                margin-right: 20px;
+                margin-left: 1rem;
+                margin-right: 1rem;
+                margin-top: 80px;
             }
 
             .loader {
@@ -517,7 +545,7 @@
                 height: 4px;
             }
 
-            .overlay {
+            .sidebar-overlay {
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -525,12 +553,16 @@
                 height: 100%;
                 background: rgba(0, 0, 0, 0.5);
                 z-index: 899;
-                /* Below sidebar, above main content */
                 display: none;
             }
 
             body.no-scroll {
                 overflow: hidden;
+            }
+
+            .footer {
+                margin-left: 0;
+                width: 100%;
             }
         }
 
@@ -600,88 +632,134 @@
         <i class="fas fa-bars"></i>
     </button>
 
+    <!-- Profile Toggle Button (Mobile Only) -->
+    @if (Auth::guard('booking')->check())
+    <div class="dropdown">
+        <button class="profile-toggle-btn" id="profileToggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileToggle">
+            <li>
+                <a class="dropdown-item" href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">
+                    Change Password
+                </a>
+            </li>
+            @if(is_array(Auth::guard('booking')->user()->switchable_branches) && count(Auth::guard('booking')->user()->switchable_branches) > 1)
+            <li class="dropdown-submenu">
+                <a class="dropdown-item dropdown-toggle" href="#" data-bs-toggle="dropdown">Switch Branch</a>
+                <ul class="dropdown-menu">
+                    @foreach(Auth::guard('booking')->user()->switchable_branches as $branch)
+                    <li>
+                        <form action="{{ route('booking.switch-branch') }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="branch" value="{{ $branch }}">
+                            <button type="submit" class="dropdown-item"
+                                {{ session('selected_branch', Auth::guard('booking')->user()->hospital_branch) === $branch ? 'disabled' : '' }}>
+                                {{ ucfirst($branch) }}
+                            </button>
+                        </form>
+                    </li>
+                    @endforeach
+                </ul>
+            </li>
+            @endif
+            <li>
+                <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
+                    @csrf
+                    <button type="submit" class="dropdown-item">Logout</button>
+                </form>
+            </li>
+        </ul>
+    </div>
+    @endif
+
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="navbar-collapse " id="navbarNav">
-                <ul class="navbar-nav ms-auto align-items-center">
-                    @auth('booking')
-                    <!-- Display User Name and Branch -->
-                    <li class="nav-item me-3">
-                        <span class="navbar-text text-white">
-                            {{ Auth::guard('booking')->user()->full_name }}
-                            ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
-                        </span>
-                    </li>
-                    <!-- Settings Dropdown -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle text-white" href="#" id="navbarDropdown" role="button"
-                            data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-cog"></i>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item"
-                                    href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">Change
-                                    Password</a>
-                            </li>
-                            @if(is_array(Auth::guard('booking')->user()->switchable_branches) && count(Auth::guard('booking')->user()->switchable_branches) > 1)
-                            <li class="dropdown-submenu">
-                                <a class="dropdown-item dropdown-toggle" href="#" data-bs-toggle="dropdown">Switch Branch</a>
-                                <ul class="dropdown-menu">
-                                    @foreach(Auth::guard('booking')->user()->switchable_branches as $branch)
-                                    <li>
-                                        <form action="{{ route('booking.switch-branch') }}" method="POST">
-                                            @csrf
-                                            <input type="hidden" name="branch" value="{{ $branch }}">
-                                            <button type="submit" class="dropdown-item"
-                                                {{ session('selected_branch', Auth::guard('booking')->user()->hospital_branch) === $branch ? 'disabled' : '' }}>
-                                                {{ ucfirst($branch) }}
-                                            </button>
-                                        </form>
-                                    </li>
-                                    @endforeach
-                                </ul>
-                            </li>
-                            @endif
-                            <li>
-                                <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
-                                    @csrf
-                                    <button type="submit" class="dropdown-item">Logout</button>
-                                </form>
-                            </li>
-                        </ul>
-                    </li>
-                    @else
-                    <!-- Show login link if not authenticated -->
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="{{ route('booking.login') }}">Login</a>
-                    </li>
-                    @endauth
-                </ul>
+            <a class="navbar-brand" href="{{ route('booking.dashboard') }}">Booking Management System</a>
+            @if (Auth::guard('booking')->check())
+            <div class="navbar-nav ms-auto d-none d-md-flex align-items-center">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle text-white d-flex align-items-center" href="#" id="navbarDropdown"
+                        role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-user-circle me-1"></i>
+                        {{ Auth::guard('booking')->user()->full_name }}
+                        ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
+                        <i class="fas fa-cog ms-2"></i>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                        <li>
+                            <a class="dropdown-item"
+                                href="{{ route('booking.password.request', Auth::guard('booking')->user()->id) }}">
+                                Change Password
+                            </a>
+                        </li>
+                        @if(is_array(Auth::guard('booking')->user()->switchable_branches) && count(Auth::guard('booking')->user()->switchable_branches) > 1)
+                        <li class="dropdown-submenu">
+                            <a class="dropdown-item dropdown-toggle" href="#" data-bs-toggle="dropdown">Switch Branch</a>
+                            <ul class="dropdown-menu">
+                                @foreach(Auth::guard('booking')->user()->switchable_branches as $branch)
+                                <li>
+                                    <form action="{{ route('booking.switch-branch') }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="branch" value="{{ $branch }}">
+                                        <button type="submit" class="dropdown-item"
+                                            {{ session('selected_branch', Auth::guard('booking')->user()->hospital_branch) === $branch ? 'disabled' : '' }}>
+                                            {{ ucfirst($branch) }}
+                                        </button>
+                                    </form>
+                                </li>
+                                @endforeach
+                            </ul>
+                        </li>
+                        @endif
+                        <li>
+                            <form action="{{ route('booking.logout') }}" method="POST" style="display: inline;">
+                                @csrf
+                                <button type="submit" class="dropdown-item">Logout</button>
+                            </form>
+                        </li>
+                    </ul>
+                </li>
             </div>
+            @else
+            <div class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link text-white" href="{{ route('booking.login') }}">Login</a>
+                </li>
+            </div>
+            @endif
         </div>
     </nav>
+
     @if(isset($alertsCount) && is_numeric($alertsCount) && $alertsCount > 0)
     <h5 class="alert-panel alert alert-danger">
         <i class="fas fa-exclamation-triangle"></i>
         You have {{ $alertsCount }} important {{ $alertsCount == 1 ? 'alert' : 'alerts' }},
         click <a href="{{ route('booking.alerts') }}" class="text-primary text-decoration-underline">here</a> to view.
     </h5>
-@endif
+    @endif
+
     <!-- Sidebar -->
     <div class="sidebar">
-        <div class="sidebar-header">DMS</div>
+        <div class="sidebar-header">
+            <img src="{{ asset('images/logo.png') }}" alt="Kijabe logo" class="active">
+        </div>
+        @if (Auth::guard('booking')->check())
+        <div class="user-info d-md-none">
+            <i class="fas fa-user-circle"></i>
+            {{ Auth::guard('booking')->user()->full_name }}
+            ({{ ucfirst(Auth::guard('booking')->user()->hospital_branch) }})
+        </div>
+        @endif
+
         <ul class="list-unstyled">
-            <li><a href="{{ route('booking.dashboard') }}"><i
-                        class="fas fa-tachometer-alt"></i><span>Dashboard</span></a></li>
+            <li><a href="{{ route('booking.dashboard') }}"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a></li>
             <li class="has-submenu">
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-calendar-alt"></i>
                     <span class="menu-text">Appointments</span>
+                   <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li>
@@ -715,9 +793,10 @@
                         </a>
                     </li>
                     @php
-                    $userBranch = Auth::guard('booking')->user()->hospital_branch;
+                    $user = Auth::guard('booking')->user();
+                    $selectedBranch = session('selected_branch', $user->hospital_branch);
                     @endphp
-                    @if ($userBranch === 'kijabe')
+                    @if ($selectedBranch === 'kijabe')
                     <li>
                         <a href="{{ route('booking.dashboard', 'external_pending') }}" class="submenu-item">
                             <i class="fas fa-hourglass-half me-2"></i>
@@ -743,12 +822,6 @@
                             <span class="menu-text">All</span>
                         </a>
                     </li>
-                    <!-- <li>
-                        <a href="#" class="submenu-item">
-                            <i class="fa-solid fa-user-check me-2"></i>
-                            <span class="menu-text">Smart Schedule</span>
-                        </a>
-                    </li> -->
                 </ul>
             </li>
             @if(Auth::guard('booking')->check() && Auth::guard('booking')->user()->role === 'superadmin')
@@ -756,7 +829,7 @@
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-hospital-alt"></i>
                     <span class="menu-text">Satelites</span>
-                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                   <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li>
@@ -790,7 +863,7 @@
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-bell"></i>
                     <span class="menu-text">Alerts</span>
-                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                    <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li>
@@ -805,17 +878,19 @@
                             <i class="fas fa-check-circle"></i> Resolved
                         </a>
                     </li>
+                    @if(Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
                     <li class="has_submenu">
                         <a href="javascript:void(0)" class="submenu-toggle">
                             <i class="fas fa-bell"></i>
                             <span class="menu-text">Reminders</span>
-                            <i class="fas fa-chevron-down submenu-indicator"></i>
+                            <i class="fa fa-sort-desc" aria-hidden="true"></i>
                         </a>
                         <ul class="submenu">
                             <li><a href="{{ route('booking.reminders') }}"><i class="fas fa-sms"></i> Send Reminder</a></li>
                             <li><a href="{{ route('booking.delivery_log') }}"><i class="fas fa-clipboard-list"></i> Delivery Log</a></li>
                         </ul>
                     </li>
+                    @endif
                 </ul>
             </li>
             <li class="nav-item">
@@ -823,48 +898,33 @@
                     <i class="fas fa-calendar-plus me-2"></i> Doctor's Diary
                 </a>
             </li>
-            <!-- <li><a href="{{ route('booking.calendar') }}"><i
-                        class="fas fa-calendar-plus me-2"></i><span>Calendar</span></a></li> -->
-            <!-- 
-            <li><a class="{{ Request::is('booking/reminders*') ? 'active' : '' }}"
-                    href="{{ route('booking.reminders') }}">
-                    <i class="fas fa-bell me-2"></i> Reminders
-                    @if(isset($reminderCount) && $reminderCount > 0)
-                        <span class="badge rounded-pill ms-2" id="reminderAlert"
-                            style="background-color: #e53935; color: white;">
-                            {{ $reminderCount }}
-                        </span>
-                    @endif
-                </a></li> -->
             <li><a href="{{ route('booking.search') }}"><i class="fas fa-search"></i> <span>Search</span></a></li>
+            @if(Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
             <li class="has-submenu">
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-file-alt"></i>
                     <span class="menu-text">Reports</span>
-                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                    <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li><a href="{{ route('booking.reports') }}"><i class="fas fa-file-alt"></i> <span>Summary Report</span></a></li>
                     <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>Detailed Report</span></a></li>
-                    <!-- <li><a href="{{ route('booking.detailed-report') }}"><i class="fas fa-file-alt"></i> <span>HMIS Report</span></a></li> -->
                 </ul>
             </li>
-
+            @endif
             <li><a href="{{ route('booking.specialization.limits') }}"><i class="fas fa-chart-line"></i> <span>View Limits</span></a></li>
-
             @if (Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['admin', 'superadmin']))
             <li class="has-submenu">
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-cog"></i>
                     <span class="menu-text">Account</span>
-                    <i class="fas fa-chevron-down submenu-indicator"></i>
+                    <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li><a href="{{ route('booking.auth.users.index') }}" class="submenu-item">
                             <i class="fas fa-user"></i>
                             <span class="menu-text">User Management</span> </a>
                     </li>
-
                     <li class="nav-item">
                         <a class="submenu-item {{ request()->routeIs('booking.auth.doctors.*') ? 'active' : '' }}"
                             href="{{ route('booking.auth.doctors.index') }}">
@@ -891,9 +951,10 @@
     </div>
 
     <div class="overlay" id="sidebarOverlay"></div>
-
-    <!-- Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script type="text/javascript" src="https://cdn.datatables.net/2.0.7/js/dataTables.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Loader: DOMContentLoaded');
@@ -902,13 +963,14 @@
             const toggles = document.querySelectorAll('.submenu-toggle');
             toggles.forEach(toggle => {
                 const submenu = toggle.nextElementSibling;
-                const submenuItems = submenu.querySelectorAll('.submenu-item');
                 const submenuId = toggle.getAttribute('data-submenu-id') || 'default';
                 const isSubmenuOpen = localStorage.getItem(`submenuOpen_${submenuId}`) === 'true';
+
                 if (isSubmenuOpen) {
                     submenu.classList.add('show');
                     toggle.classList.add('active');
                 }
+
                 toggle.addEventListener('click', function(e) {
                     e.preventDefault();
                     const isOpen = submenu.classList.contains('show');
@@ -921,56 +983,46 @@
             // Mobile Sidebar Toggle
             const sidebar = document.querySelector('.sidebar');
             const sidebarToggleBtn = document.getElementById('sidebarToggle');
-            const mainContent = document.querySelector('.main-content');
-            const navbar = document.querySelector('.navbar');
-            const footer = document.querySelector('.footer');
-            const alertPanel = document.querySelector('.alert-panel');
             const sidebarOverlay = document.getElementById('sidebarOverlay');
             const body = document.body;
 
-            sidebarToggleBtn.addEventListener('click', function() {
-                const isHidden = sidebar.classList.contains('hidden');
-                const isMobile = window.innerWidth <= 768;
-
-                if (isMobile) {
-                    sidebar.classList.toggle('show'); // Use 'show' for mobile
+            if (sidebarToggleBtn) {
+                sidebarToggleBtn.addEventListener('click', function() {
+                    sidebar.classList.toggle('show');
                     sidebarOverlay.style.display = sidebar.classList.contains('show') ? 'block' : 'none';
                     body.classList.toggle('no-scroll');
-                } else {
-                    sidebar.classList.toggle('hidden');
-                    mainContent.classList.toggle('hidden-sidebar');
-                    navbar.classList.toggle('hidden-sidebar');
-                    footer.classList.toggle('hidden-sidebar');
-                    if (alertPanel) {
-                        alertPanel.classList.toggle('hidden-sidebar');
-                    }
-                    // Save sidebar state to localStorage
-                    localStorage.setItem('sidebarHidden', sidebar.classList.contains('hidden'));
-                }
-            });
+                });
+            }
 
-            // Close sidebar when clicking outside on mobile
             sidebarOverlay.addEventListener('click', function() {
                 sidebar.classList.remove('show');
                 sidebarOverlay.style.display = 'none';
                 body.classList.remove('no-scroll');
             });
 
-            // On initial load, apply saved sidebar state for desktop
-            if (window.innerWidth > 768) {
-                const savedSidebarState = localStorage.getItem('sidebarHidden');
-                if (savedSidebarState === 'true') {
-                    sidebar.classList.add('hidden');
-                    mainContent.classList.add('hidden-sidebar');
-                    navbar.classList.add('hidden-sidebar');
-                    footer.classList.add('hidden-sidebar');
-                    if (alertPanel) {
-                        alertPanel.classList.add('hidden-sidebar');
-                    }
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown')) {
+                    document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+                        const dropdownInstance = bootstrap.Dropdown.getInstance(menu.previousElementSibling);
+                        if (dropdownInstance) {
+                            dropdownInstance.hide();
+                        }
+                    });
                 }
-            }
+            });
 
-            // Hide loader after all assets are loaded and parsed
+            // Dropdown submenu toggle for mobile
+            document.querySelectorAll('.dropdown-submenu .dropdown-toggle').forEach(function(toggle) {
+                toggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const submenu = toggle.nextElementSibling;
+                    submenu.classList.toggle('show');
+                });
+            });
+
+            // Hide loader after all assets are loaded
             window.addEventListener('load', function() {
                 console.log('Loader: Window loaded');
                 const loaderOverlay = document.getElementById('loaderOverlay');
@@ -984,50 +1036,60 @@
                 }
             });
 
-            // Restore active state on page load (only if the user has interacted)
-            if (!isInitialLoad) {
-                const activeItem = localStorage.getItem('activeSidebarItem');
-                if (activeItem) {
-                    const activeLink = document.querySelector(`.sidebar a[href="${activeItem}"]`);
-                    if (activeLink) {
-                        sidebarLinks.forEach(l => l.classList.remove('active'));
-                        activeLink.classList.add('active');
+            // Restore active state on page load
+            const currentPath = window.location.pathname + window.location.search;
+            const sidebarLinks = document.querySelectorAll('.sidebar a');
+            sidebarLinks.forEach(link => {
+                const linkHref = link.getAttribute('href').replace(/\/+$/, '');
+                const currentPathClean = currentPath.replace(/\/+$/, '');
+                if (linkHref === currentPathClean) {
+                    link.classList.add('active');
+                    let parentSubmenu = link.closest('.submenu');
+                    while (parentSubmenu) {
+                        parentSubmenu.classList.add('show');
+                        let parentToggle = parentSubmenu.previousElementSibling;
+                        if (parentToggle && parentToggle.classList.contains('submenu-toggle')) {
+                            parentToggle.classList.add('active');
+                            const submenuId = parentToggle.getAttribute('data-submenu-id') || 'default';
+                            localStorage.setItem(`submenuOpen_${submenuId}`, 'true');
+                        }
+                        parentSubmenu = parentSubmenu.parentNode.closest('.submenu');
                     }
                 }
-            }
+            });
 
             // Loading indicator functionality
             const loaderOverlay = document.getElementById('loaderOverlay');
             const tableResponsive = document.querySelector('.table-responsive');
-
-            // Hide loader when DOM is ready
             console.log('Loader: Hiding');
-            loaderOverlay.classList.remove('active');
-            sessionStorage.removeItem('loaderActive');
+            if (loaderOverlay) {
+                loaderOverlay.classList.remove('active');
+                sessionStorage.removeItem('loaderActive');
+            }
             if (tableResponsive) {
                 tableResponsive.classList.add('loaded');
             }
 
-            // Show loader for form submissions
             document.querySelectorAll('form').forEach(form => {
                 form.addEventListener('submit', function() {
                     console.log('Loader: Showing for form submission');
-                    loaderOverlay.classList.add('active');
-                    sessionStorage.setItem('loaderActive', 'true');
+                    if (loaderOverlay) {
+                        loaderOverlay.classList.add('active');
+                        sessionStorage.setItem('loaderActive', 'true');
+                    }
                     if (tableResponsive) {
                         tableResponsive.classList.remove('loaded');
                     }
                 });
             });
-        });
 
-        // Ensure loader stays active during page unload
-        window.addEventListener('beforeunload', function() {
-            const loaderOverlay = document.getElementById('loaderOverlay');
-            if (sessionStorage.getItem('loaderActive') === 'true') {
-                console.log('Loader: Persisting on beforeunload');
-                loaderOverlay.classList.add('active');
-            }
+            window.addEventListener('beforeunload', function() {
+                const loaderOverlay = document.getElementById('loaderOverlay');
+                if (loaderOverlay && sessionStorage.getItem('loaderActive') === 'true') {
+                    console.log('Loader: Persisting on beforeunload');
+                    loaderOverlay.classList.add('active');
+                }
+            });
         });
     </script>
     @yield('scripts')

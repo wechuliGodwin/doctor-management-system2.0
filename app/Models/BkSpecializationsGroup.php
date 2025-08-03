@@ -13,7 +13,6 @@ class BkSpecializationsGroup extends Model
         'group_name',
     ];
 
-    // Optional: Define relationship to specializations
     public function specializations()
     {
         return $this->hasMany(BkSpecializations::class, 'group_id');

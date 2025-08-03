@@ -55,11 +55,7 @@
                     </ul>
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                @elseif(session('error') && !session('suggested_dates'))
-                <div class="alert alert-danger alert-dismissible fade show" role="alert" style="font-family: 'Roboto', sans-serif; border-radius: 5px;">
-                    {{ session('error') }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                {{-- No need for @elseif(session('error') && !session('suggested_dates')) here as the modal handles it --}}
                 @endif
 
                 <form role="form" method="POST" action="{{ route('booking.submitInternal') }}" id="appointmentForm">
@@ -215,13 +211,6 @@
         </div>
     </div>
 </div>
-
-@include('booking.suggested_dates_modal')
-
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
     function addSeparator() {
         const input = document.getElementById('phone');
@@ -231,6 +220,7 @@
         }
     }
 
+    // Function to update the main form fields with data from old input (e.g., from session)
     function updateFormFields(formData) {
         for (const key in formData) {
             const inputElement = document.querySelector(`[name="${key}"]`);
@@ -259,12 +249,6 @@
         if (hospitalBranch !== 'kijabe' && formData.doctor_name) {
             $('#doctor_select2').val(formData.doctor_name).trigger('change');
         }
-
-        $('.select2-specialization').select2({
-            placeholder: "-- Select a Specialization --",
-            allowClear: true,
-            width: '100%'
-        });
     }
 
     $(document).ready(function() {
@@ -274,14 +258,42 @@
             width: '100%'
         });
 
-        $('#suggestedDatesModal').on('shown.bs.modal', function() {
-            $('.select2-specialization').select2({
-                placeholder: "-- Select a Specialization --",
-                allowClear: true,
-                width: '100%'
-            });
-            $(this).find('.btn-close').focus();
+        // Check if suggested_dates are present in the session (from the controller redirect)
+        @if(session('suggested_dates') && session('error') && session('modal_context') === 'booking')
+            // Get the modal instance
+            var suggestedDatesModal = new bootstrap.Modal(document.getElementById('suggestedDatesModal'));
 
+            // Set the error message in the modal
+            $('#modal-error-message').text("{{ session('error') }}");
+
+            // Populate hidden fields in the modal's form with current old input data
+            var oldInput = @json(session('_old_input'));
+            var modalForm = $('#suggested-dates-form');
+            modalForm.find('input[name^="form_data"]').remove(); // Clear previous hidden inputs
+
+            for (var key in oldInput) {
+                if (oldInput.hasOwnProperty(key)) {
+                    if (Array.isArray(oldInput[key])) {
+                        oldInput[key].forEach(function(subValue, subKey) {
+                            modalForm.append('<input type="hidden" name="form_data[' + key + '][' + subKey + ']" value="' + subValue + '">');
+                        });
+                    } else {
+                        modalForm.append('<input type="hidden" name="form_data[' + key + ']" value="' + oldInput[key] + '">');
+                    }
+                }
+            }
+
+            // Show the modal
+            suggestedDatesModal.show();
+        @endif
+
+        // When the suggestedDatesModal is hidden (closed), clear relevant session data
+        $('#suggestedDatesModal').on('hidden.bs.modal', function () {
+            // Optionally, you might want to clear the form data if the user closes the modal without selecting a date.
+            // For now, we'll rely on the server-side clearSuggestedDates route if a page refresh happens.
+            // If you want to clear client-side without refresh, you'd need AJAX to hit a route.
+            // Since you want to retain functionality with less JS, server-side clear on close is handled via the button.
+            // The `window.location.href` in the modal's close button already triggers a redirect to clear session data.
         });
     });
 </script>

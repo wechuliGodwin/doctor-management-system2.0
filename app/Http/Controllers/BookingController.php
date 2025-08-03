@@ -38,7 +38,6 @@ use Illuminate\Support\Facades\Route;
 
 class BookingController extends Controller
 {
-
     //internal booking form
     public function internal()
     {
@@ -54,7 +53,6 @@ class BookingController extends Controller
         $bk_specializations = BkSpecializations::filter('hospital_branch', $userBranch)->pluck('name')->toArray(); // filter by logged in user
         return view('booking.internal_booking_form', compact('bk_specializations',));
     }
-
     //to show booking form in the dashboard
     public function add()
     {
@@ -72,22 +70,19 @@ class BookingController extends Controller
         #$hospitalBranches = $this->getHospitalBranchEnumValues();
         return view('booking.add', compact('bk_specializations', 'doctors', 'userBranch'));
     }
-
     //external booking form
     public function show()
     {
         $specializations = BkSpecializations::where('hospital_branch', 'kijabe')->pluck('name')->toArray();
         return view('booking.show', compact('specializations'));
     }
-
     public function reports(Request $request)
     {
         $user = Auth::guard('booking')->user();
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
         $userBranch = $user ? $user->hospital_branch : null;
-        $selectedBranch = null;
-
+        $selectedBranch = session('selected_branch', $userBranch);
         // Validation rules
         $validationRules = [
             'ajax' => 'nullable|boolean',
@@ -105,9 +100,10 @@ class BookingController extends Controller
         $request->validate($validationRules);
 
         // Determine selected branch
-        if ($isSuperadmin) {
+        if ($isSuperadmin && $request->has('branch')) {
             $selectedBranch = $request->input('branch');
-        } else {
+            session(['selected_branch' => $selectedBranch]);
+        } elseif (!$isSuperadmin) {
             $selectedBranch = $userBranch;
         }
 
@@ -133,8 +129,13 @@ class BookingController extends Controller
             $endDate = Carbon::now()->endOfMonth()->toDateString();
         }
 
-        // Fetch hospital branches and specializations
+        // Fetch hospital branches
         $hospitalBranches = $this->getHospitalBranchEnumValues();
+        Log::info('Fetched hospital_branch enum values from bk_appointments', [
+            'values' => $hospitalBranches,
+        ]);
+
+        // Fetch specializations
         $specializations = $isSuperadmin
             ? BkSpecializations::select('id', 'name', 'hospital_branch')
             ->orderBy('name')
@@ -143,7 +144,7 @@ class BookingController extends Controller
                 $spec->display_name = $spec->name . ' (' . ucfirst($spec->hospital_branch) . ')';
                 return $spec;
             })
-            : BkSpecializations::where('hospital_branch', $userBranch)
+            : BkSpecializations::where('hospital_branch', $selectedBranch)
             ->orderBy('name')
             ->get()
             ->map(function ($spec) {
@@ -157,16 +158,21 @@ class BookingController extends Controller
             ->orderBy('doctor_name')
             ->get()
             ->map(function ($doctor) {
-                $doctor->display_name = $doctor->doctor_name . ' - ' . ucfirst($doctor->hospital_branch);
+                $doctor->display_name = $doctor->doctor_name . ' (' . ucfirst($doctor->hospital_branch) . ')';
                 return $doctor;
             })
-            : BkDoctor::where('hospital_branch', $userBranch)
+            : BkDoctor::where('hospital_branch', $selectedBranch)
             ->orderBy('doctor_name')
             ->get()
             ->map(function ($doctor) {
                 $doctor->display_name = $doctor->doctor_name;
                 return $doctor;
             });
+
+        // all external_pending_approvals data for verification
+        $allExternalPendingData = ExternalPendingApproval::select('specialization', 'status', 'appointment_date')
+            ->whereBetween('appointment_date', [$startDate, $endDate])
+            ->get();
 
         // Fetch specialization performance data
         $query = BkSpecializations::query()
@@ -181,18 +187,18 @@ class BookingController extends Controller
                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                 +
                 (SELECT COUNT(*) FROM external_pending_approvals epa 
-                 WHERE epa.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(epa.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
                 +
                 (SELECT COUNT(*) FROM cancelled_appointments c 
-                 WHERE c.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(c.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ")
             ) as total_appointments"),
@@ -204,11 +210,11 @@ class BookingController extends Controller
                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_status = 'pending'
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
             ) as confirmed_pending"),
                 DB::raw("(
                 (SELECT COUNT(*) FROM bk_appointments a 
@@ -218,12 +224,19 @@ class BookingController extends Controller
                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_status IN ('honoured', 'early', 'late')
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
             ) as patients_seen"),
+                DB::raw("(
+                (SELECT COUNT(*) FROM bk_appointments a 
+                 WHERE a.specialization = bk_specializations.id
+                 AND a.hmis_visit_status = 'honoured'
+                 AND a.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
+            ) as hmis_honoured"),
                 DB::raw("(
                 (SELECT COUNT(*) FROM bk_appointments a 
                  WHERE a.specialization = bk_specializations.id
@@ -232,32 +245,31 @@ class BookingController extends Controller
                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ")
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_status = 'missed'
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ")
             ) as missed"),
                 DB::raw("(SELECT COUNT(*) FROM cancelled_appointments c 
-                 WHERE c.specialization = bk_specializations.name 
-                 AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                     WHERE TRIM(LOWER(c.specialization)) = TRIM(LOWER(bk_specializations.name)) 
+                     AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . ") as cancelled"),
                 DB::raw("(SELECT COUNT(*) 
-                 FROM bk_rescheduled_appointments r 
-                 JOIN bk_appointments a ON r.appointment_id = a.id 
-                 WHERE a.specialization = bk_specializations.id 
-                 AND r.created_at BETWEEN '$startDate' AND '$endDate'" .
+                     FROM bk_rescheduled_appointments r 
+                     JOIN bk_appointments a ON r.appointment_id = a.id 
+                     WHERE a.specialization = bk_specializations.id 
+                     AND r.created_at BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND a.hospital_branch = '$selectedBranch'" : "") . ") as rescheduled"),
                 DB::raw("(SELECT COUNT(*) FROM external_pending_approvals epa 
-                 WHERE epa.specialization = bk_specializations.name 
-                 AND epa.status = 'pending' 
-                 AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as pending_external_approvals"),
+                     WHERE TRIM(LOWER(epa.specialization)) = TRIM(LOWER(bk_specializations.name))
+                     AND epa.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as pending_external_approvals"),
                 DB::raw("(SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name 
-                 AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
+                     WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name)) 
+                     AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as external_approved"),
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . ") as external_approved"),
                 DB::raw("(
                 (SELECT COUNT(*) FROM bk_appointments a 
                  WHERE a.specialization = bk_specializations.id
@@ -271,10 +283,10 @@ class BookingController extends Controller
                  ))
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
                  AND EXISTS (
                      SELECT 1 FROM bk_tracing t 
                      WHERE t.appointment_id = e.id 
@@ -283,7 +295,7 @@ class BookingController extends Controller
                  ))
                 +
                 (SELECT COUNT(*) FROM cancelled_appointments c 
-                 WHERE c.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(c.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . "
                  AND EXISTS (
@@ -306,10 +318,10 @@ class BookingController extends Controller
                  ))
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
                  AND EXISTS (
                      SELECT 1 FROM bk_tracing t 
                      WHERE t.appointment_id = e.id 
@@ -318,7 +330,7 @@ class BookingController extends Controller
                  ))
                 +
                 (SELECT COUNT(*) FROM cancelled_appointments c 
-                 WHERE c.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(c.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . "
                  AND EXISTS (
@@ -339,17 +351,17 @@ class BookingController extends Controller
                  ))
                 +
                 (SELECT COUNT(*) FROM external_approveds e 
-                 WHERE e.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(e.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND e.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch ? " AND e.hospital_branch = '$selectedBranch'" : "") .
-                    (!$isSuperadmin && $userBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
+                    ($selectedBranch !== 'kijabe' ? " AND 1 = 0" : "") . "
                  AND NOT EXISTS (
                      SELECT 1 FROM bk_tracing t 
                      WHERE t.appointment_id = e.id
                  ))
                 +
                 (SELECT COUNT(*) FROM cancelled_appointments c 
-                 WHERE c.specialization = bk_specializations.name
+                 WHERE TRIM(LOWER(c.specialization)) = TRIM(LOWER(bk_specializations.name))
                  AND c.appointment_date BETWEEN '$startDate' AND '$endDate'" .
                     ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch') ? " AND c.hospital_branch = '$selectedBranch'" : "") . "
                  AND NOT EXISTS (
@@ -370,20 +382,7 @@ class BookingController extends Controller
 
         try {
             $specializationData = $query->get();
-            Log::info('Specialization report data fetched', [
-                'count' => $specializationData->count(),
-                'branch' => $selectedBranch ?? 'all',
-                'specialization' => $selectedSpecialization ?? 'all',
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'time_period' => $timePeriod,
-            ]);
         } catch (\Exception $e) {
-            Log::error('Failed to fetch specialization report data: ' . $e->getMessage(), [
-                'sql' => $query->toSql(),
-                'bindings' => $query->getBindings(),
-                'trace' => $e->getTraceAsString(),
-            ]);
             return redirect()->route('booking.reports')->with('error', 'Failed to load report data: ' . $e->getMessage());
         }
 
@@ -392,6 +391,7 @@ class BookingController extends Controller
             'traced_contacted' => $specializationData->sum('traced_contacted'),
             'traced_no_response' => $specializationData->sum('traced_no_response'),
             'traced_other' => $specializationData->sum('traced_other'),
+            'hmis_honoured' => $specializationData->sum('hmis_honoured'),
         ];
 
         // Fetch hospital branch bookings data (for superadmins and admins only)
@@ -402,26 +402,27 @@ class BookingController extends Controller
                     'hospital_branch',
                     DB::raw('COUNT(*) as total_bookings'),
                     DB::raw("SUM(CASE WHEN EXISTS (
-                    SELECT 1 FROM bk_tracing t 
-                    WHERE t.appointment_id = bk_appointments.id 
-                    AND t.status = 'contacted'
-                    AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
-                ) THEN 1 ELSE 0 END) as traced_contacted"),
+                SELECT 1 FROM bk_tracing t 
+                WHERE t.appointment_id = bk_appointments.id 
+                AND t.status = 'contacted'
+                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
+            ) THEN 1 ELSE 0 END) as traced_contacted"),
                     DB::raw("SUM(CASE WHEN EXISTS (
-                    SELECT 1 FROM bk_tracing t 
-                    WHERE t.appointment_id = bk_appointments.id 
-                    AND t.status = 'no response'
-                    AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
-                ) THEN 1 ELSE 0 END) as traced_no_response"),
+                SELECT 1 FROM bk_tracing t 
+                WHERE t.appointment_id = bk_appointments.id 
+                AND t.status = 'no response'
+                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
+            ) THEN 1 ELSE 0 END) as traced_no_response"),
                     DB::raw("SUM(CASE WHEN NOT EXISTS (
-                    SELECT 1 FROM bk_tracing t 
-                    WHERE t.appointment_id = bk_appointments.id
-                ) THEN 1 ELSE 0 END) as traced_other"),
+                SELECT 1 FROM bk_tracing t 
+                WHERE t.appointment_id = bk_appointments.id
+            ) THEN 1 ELSE 0 END) as traced_other"),
+                    DB::raw("SUM(CASE WHEN hmis_visit_status = 'honoured' THEN 1 ELSE 0 END) as hmis_honoured"),
                 ])
                 ->whereBetween('appointment_date', [$startDate, $endDate])
                 ->where('appointment_status', '!=', 'rescheduled')
-                ->when($isAdmin && !$isSuperadmin, function ($q) use ($userBranch) {
-                    $q->where('hospital_branch', $userBranch);
+                ->when($isAdmin && !$isSuperadmin, function ($q) use ($selectedBranch) {
+                    $q->where('hospital_branch', $selectedBranch);
                 })
                 ->groupBy('hospital_branch')
                 ->union(
@@ -430,30 +431,61 @@ class BookingController extends Controller
                             'hospital_branch',
                             DB::raw('COUNT(*) as total_bookings'),
                             DB::raw("SUM(CASE WHEN EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = external_approveds.id 
-                            AND t.status = 'contacted'
-                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
-                        ) THEN 1 ELSE 0 END) as traced_contacted"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_approveds.id 
+                        AND t.status = 'contacted'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
+                    ) THEN 1 ELSE 0 END) as traced_contacted"),
                             DB::raw("SUM(CASE WHEN EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = external_approveds.id 
-                            AND t.status = 'no response'
-                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
-                        ) THEN 1 ELSE 0 END) as traced_no_response"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_approveds.id 
+                        AND t.status = 'no response'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
+                    ) THEN 1 ELSE 0 END) as traced_no_response"),
                             DB::raw("SUM(CASE WHEN NOT EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = external_approveds.id
-                        ) THEN 1 ELSE 0 END) as traced_other"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_approveds.id
+                    ) THEN 1 ELSE 0 END) as traced_other"),
+                            DB::raw("0 as hmis_honoured"),
                         ])
                         ->whereBetween('appointment_date', [$startDate, $endDate])
                         ->when($isAdmin && !$isSuperadmin, function ($q) use ($userBranch) {
                             $q->where('hospital_branch', $userBranch);
                         })
-                        ->when(!$isSuperadmin && $userBranch !== 'kijabe', function ($q) {
+                        ->when($selectedBranch !== 'kijabe', function ($q) {
                             $q->whereRaw('1 = 0');
                         })
                         ->groupBy('hospital_branch')
+                )
+                ->union(
+                    ExternalPendingApproval::query()
+                        ->select([
+                            DB::raw('? as hospital_branch'),
+                            DB::raw('COUNT(*) as total_bookings'),
+                            DB::raw("SUM(CASE WHEN EXISTS (
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_pending_approvals.id 
+                        AND t.status = 'contacted'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_pending_approvals.id)
+                    ) THEN 1 ELSE 0 END) as traced_contacted"),
+                            DB::raw("SUM(CASE WHEN EXISTS (
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_pending_approvals.id 
+                        AND t.status = 'no response'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_pending_approvals.id)
+                    ) THEN 1 ELSE 0 END) as traced_no_response"),
+                            DB::raw("SUM(CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = external_pending_approvals.id
+                    ) THEN 1 ELSE 0 END) as traced_other"),
+                            DB::raw("0 as hmis_honoured"),
+                        ])
+                        ->whereBetween('appointment_date', [$startDate, $endDate])
+                        ->when($selectedBranch !== 'kijabe', function ($q) {
+                            $q->whereRaw('1 = 0');
+                        })
+                        ->addBinding($selectedBranch ?? 'unknown', 'select')
+                        ->groupBy()
                 )
                 ->union(
                     CancelledAppointment::query()
@@ -461,21 +493,22 @@ class BookingController extends Controller
                             'hospital_branch',
                             DB::raw('COUNT(*) as total_bookings'),
                             DB::raw("SUM(CASE WHEN EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = cancelled_appointments.id 
-                            AND t.status = 'contacted'
-                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
-                        ) THEN 1 ELSE 0 END) as traced_contacted"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = cancelled_appointments.id 
+                        AND t.status = 'contacted'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
+                    ) THEN 1 ELSE 0 END) as traced_contacted"),
                             DB::raw("SUM(CASE WHEN EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = cancelled_appointments.id 
-                            AND t.status = 'no response'
-                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
-                        ) THEN 1 ELSE 0 END) as traced_no_response"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = cancelled_appointments.id 
+                        AND t.status = 'no response'
+                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
+                    ) THEN 1 ELSE 0 END) as traced_no_response"),
                             DB::raw("SUM(CASE WHEN NOT EXISTS (
-                            SELECT 1 FROM bk_tracing t 
-                            WHERE t.appointment_id = cancelled_appointments.id
-                        ) THEN 1 ELSE 0 END) as traced_other"),
+                        SELECT 1 FROM bk_tracing t 
+                        WHERE t.appointment_id = cancelled_appointments.id
+                    ) THEN 1 ELSE 0 END) as traced_other"),
+                            DB::raw("0 as hmis_honoured"),
                         ])
                         ->whereBetween('appointment_date', [$startDate, $endDate])
                         ->when($isAdmin && !$isSuperadmin, function ($q) use ($userBranch) {
@@ -493,27 +526,28 @@ class BookingController extends Controller
                         'hospital_branch',
                         DB::raw('COUNT(*) as total_bookings'),
                         DB::raw("SUM(CASE WHEN EXISTS (
-                        SELECT 1 FROM bk_tracing t 
-                        WHERE t.appointment_id = bk_appointments.id 
-                        AND t.status = 'contacted'
-                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
-                    ) THEN 1 ELSE 0 END) as traced_contacted"),
+                    SELECT 1 FROM bk_tracing t 
+                    WHERE t.appointment_id = bk_appointments.id 
+                    AND t.status = 'contacted'
+                    AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
+                ) THEN 1 ELSE 0 END) as traced_contacted"),
                         DB::raw("SUM(CASE WHEN EXISTS (
-                        SELECT 1 FROM bk_tracing t 
-                        WHERE t.appointment_id = bk_appointments.id 
-                        AND t.status = 'no response'
-                        AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
-                    ) THEN 1 ELSE 0 END) as traced_no_response"),
+                    SELECT 1 FROM bk_tracing t 
+                    WHERE t.appointment_id = bk_appointments.id 
+                    AND t.status = 'no response'
+                    AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = bk_appointments.id)
+                ) THEN 1 ELSE 0 END) as traced_no_response"),
                         DB::raw("SUM(CASE WHEN NOT EXISTS (
-                        SELECT 1 FROM bk_tracing t 
-                        WHERE t.appointment_id = bk_appointments.id
-                    ) THEN 1 ELSE 0 END) as traced_other"),
+                    SELECT 1 FROM bk_tracing t 
+                    WHERE t.appointment_id = bk_appointments.id
+                ) THEN 1 ELSE 0 END) as traced_other"),
+                        DB::raw("SUM(CASE WHEN hmis_visit_status = 'honoured' THEN 1 ELSE 0 END) as hmis_honoured"),
                     ])
                     ->where('specialization', $specName)
                     ->where('appointment_status', '!=', 'rescheduled')
                     ->whereBetween('appointment_date', [$startDate, $endDate])
-                    ->when($isAdmin && !$isSuperadmin, function ($q) use ($userBranch) {
-                        $q->where('hospital_branch', $userBranch);
+                    ->when($isAdmin && !$isSuperadmin, function ($q) use ($selectedBranch) {
+                        $q->where('hospital_branch', $selectedBranch);
                     })
                     ->groupBy('hospital_branch')
                     ->union(
@@ -522,31 +556,63 @@ class BookingController extends Controller
                                 'hospital_branch',
                                 DB::raw('COUNT(*) as total_bookings'),
                                 DB::raw("SUM(CASE WHEN EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = external_approveds.id 
-                                AND t.status = 'contacted'
-                                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
-                            ) THEN 1 ELSE 0 END) as traced_contacted"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_approveds.id 
+                            AND t.status = 'contacted'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
+                        ) THEN 1 ELSE 0 END) as traced_contacted"),
                                 DB::raw("SUM(CASE WHEN EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = external_approveds.id 
-                                AND t.status = 'no response'
-                                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
-                            ) THEN 1 ELSE 0 END) as traced_no_response"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_approveds.id 
+                            AND t.status = 'no response'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_approveds.id)
+                        ) THEN 1 ELSE 0 END) as traced_no_response"),
                                 DB::raw("SUM(CASE WHEN NOT EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = external_approveds.id
-                            ) THEN 1 ELSE 0 END) as traced_other"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_approveds.id
+                        ) THEN 1 ELSE 0 END) as traced_other"),
+                                DB::raw("0 as hmis_honoured"),
                             ])
                             ->where('specialization', $specName)
                             ->whereBetween('appointment_date', [$startDate, $endDate])
                             ->when($isAdmin && !$isSuperadmin, function ($q) use ($userBranch) {
                                 $q->where('hospital_branch', $userBranch);
                             })
-                            ->when(!$isSuperadmin && $userBranch !== 'kijabe', function ($q) {
+                            ->when($selectedBranch !== 'kijabe', function ($q) {
                                 $q->whereRaw('1 = 0');
                             })
                             ->groupBy('hospital_branch')
+                    )
+                    ->union(
+                        ExternalPendingApproval::query()
+                            ->select([
+                                DB::raw('? as hospital_branch'),
+                                DB::raw('COUNT(*) as total_bookings'),
+                                DB::raw("SUM(CASE WHEN EXISTS (
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_pending_approvals.id 
+                            AND t.status = 'contacted'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_pending_approvals.id)
+                        ) THEN 1 ELSE 0 END) as traced_contacted"),
+                                DB::raw("SUM(CASE WHEN EXISTS (
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_pending_approvals.id 
+                            AND t.status = 'no response'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = external_pending_approvals.id)
+                        ) THEN 1 ELSE 0 END) as traced_no_response"),
+                                DB::raw("SUM(CASE WHEN NOT EXISTS (
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = external_pending_approvals.id
+                        ) THEN 1 ELSE 0 END) as traced_other"),
+                                DB::raw("0 as hmis_honoured"),
+                            ])
+                            ->where('specialization', $specName)
+                            ->whereBetween('appointment_date', [$startDate, $endDate])
+                            ->when($selectedBranch !== 'kijabe', function ($q) {
+                                $q->whereRaw('1 = 0');
+                            })
+                            ->addBinding($selectedBranch ?? 'unknown', 'select')
+                            ->groupBy()
                     )
                     ->union(
                         CancelledAppointment::query()
@@ -554,21 +620,22 @@ class BookingController extends Controller
                                 'hospital_branch',
                                 DB::raw('COUNT(*) as total_bookings'),
                                 DB::raw("SUM(CASE WHEN EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = cancelled_appointments.id 
-                                AND t.status = 'contacted'
-                                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
-                            ) THEN 1 ELSE 0 END) as traced_contacted"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = cancelled_appointments.id 
+                            AND t.status = 'contacted'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
+                        ) THEN 1 ELSE 0 END) as traced_contacted"),
                                 DB::raw("SUM(CASE WHEN EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = cancelled_appointments.id 
-                                AND t.status = 'no response'
-                                AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
-                            ) THEN 1 ELSE 0 END) as traced_no_response"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = cancelled_appointments.id 
+                            AND t.status = 'no response'
+                            AND t.tracing_date = (SELECT MAX(tracing_date) FROM bk_tracing WHERE appointment_id = cancelled_appointments.id)
+                        ) THEN 1 ELSE 0 END) as traced_no_response"),
                                 DB::raw("SUM(CASE WHEN NOT EXISTS (
-                                SELECT 1 FROM bk_tracing t 
-                                WHERE t.appointment_id = cancelled_appointments.id
-                            ) THEN 1 ELSE 0 END) as traced_other"),
+                            SELECT 1 FROM bk_tracing t 
+                            WHERE t.appointment_id = cancelled_appointments.id
+                        ) THEN 1 ELSE 0 END) as traced_other"),
+                                DB::raw("0 as hmis_honoured"),
                             ])
                             ->where('specialization', $specName)
                             ->whereBetween('appointment_date', [$startDate, $endDate])
@@ -589,15 +656,9 @@ class BookingController extends Controller
                         'traced_contacted' => $group->sum('traced_contacted'),
                         'traced_no_response' => $group->sum('traced_no_response'),
                         'traced_other' => $group->sum('traced_other'),
+                        'hmis_honoured' => $group->sum('hmis_honoured'),
                     ];
                 })->values();
-                Log::info('Branch report data fetched', [
-                    'count' => $branchData->count(),
-                    'specialization' => $selectedSpecialization ?? 'all',
-                    'start_date' => $startDate,
-                    'end_date' => $endDate,
-                    'time_period' => $timePeriod,
-                ]);
             } catch (\Exception $e) {
                 Log::error('Failed to fetch branch report data: ' . $e->getMessage(), [
                     'sql' => $branchQuery->toSql(),
@@ -618,34 +679,23 @@ class BookingController extends Controller
                 $query->from('bk_appointments')
                     ->select('appointment_date')
                     ->whereBetween('appointment_date', [$startDate, $endDate])
-                    ->where('appointment_status', '!=', 'rescheduled');
-                if ($selectedBranch) {
-                    $query->where('hospital_branch', $selectedBranch);
-                }
-                if ($selectedSpecialization) {
-                    $query->where('specialization', $selectedSpecialization);
-                }
+                    ->where('appointment_status', '!=', 'rescheduled')
+                    ->where('hospital_branch', $selectedBranch);
                 $query->unionAll(
                     ExternalApproved::query()
                         ->select('appointment_date')
                         ->whereBetween('appointment_date', [$startDate, $endDate])
-                        ->whereRaw(!$isSuperadmin && $userBranch !== 'kijabe' ? '1 = 0' : '1 = 1')
-                        ->when($selectedBranch, function ($q) use ($selectedBranch) {
-                            $q->where('hospital_branch', $selectedBranch);
-                        })
-                        ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
-                            $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-                            $q->where('specialization', $specName);
+                        ->where('hospital_branch', $selectedBranch)
+                        ->when($selectedBranch !== 'kijabe', function ($q) {
+                            $q->whereRaw('1 = 0');
                         })
                 )
                     ->unionAll(
                         ExternalPendingApproval::query()
                             ->select('appointment_date')
                             ->whereBetween('appointment_date', [$startDate, $endDate])
-                            ->whereRaw(!$isSuperadmin && $userBranch !== 'kijabe' ? '1 = 0' : '1 = 1')
-                            ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
-                                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-                                $q->where('specialization', $specName);
+                            ->when($selectedBranch !== 'kijabe', function ($q) {
+                                $q->whereRaw('1 = 0');
                             })
                     )
                     ->unionAll(
@@ -654,10 +704,6 @@ class BookingController extends Controller
                             ->whereBetween('appointment_date', [$startDate, $endDate])
                             ->when($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch'), function ($q) use ($selectedBranch) {
                                 $q->where('hospital_branch', $selectedBranch);
-                            })
-                            ->when($selectedSpecialization, function ($q) use ($selectedSpecialization) {
-                                $specName = BkSpecializations::where('id', $selectedSpecialization)->value('name');
-                                $q->where('specialization', $specName);
                             })
                     );
             }, 'combined')
@@ -672,6 +718,8 @@ class BookingController extends Controller
                 'specialization' => $selectedSpecialization ?? 'all',
                 'start_date' => $startDate,
                 'end_date' => $endDate,
+                'sql' => $dailyBookingQuery->toSql(),
+                'bindings' => $dailyBookingQuery->getBindings(),
             ]);
 
             // Generate all dates in the range to ensure continuous data
@@ -746,6 +794,13 @@ class BookingController extends Controller
                     'borderWidth' => 1,
                 ],
                 [
+                    'label' => 'HMIS Honoured',
+                    'data' => $chartSpecializationData->pluck('hmis_honoured')->toArray(),
+                    'backgroundColor' => '#6c757d',
+                    'borderColor' => '#ffffff',
+                    'borderWidth' => 1,
+                ],
+                [
                     'label' => 'Missed',
                     'data' => $chartSpecializationData->pluck('missed')->toArray(),
                     'backgroundColor' => '#dc3545',
@@ -799,6 +854,13 @@ class BookingController extends Controller
                     'borderColor' => '#ffffff',
                     'borderWidth' => 1,
                 ],
+                [
+                    'label' => 'HMIS Honoured',
+                    'data' => $branchData->pluck('hmis_honoured')->toArray(),
+                    'backgroundColor' => '#6c757d',
+                    'borderColor' => '#ffffff',
+                    'borderWidth' => 1,
+                ],
             ],
         ];
 
@@ -837,6 +899,7 @@ class BookingController extends Controller
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
         $userBranch = $user ? $user->hospital_branch : null;
+        $selectedBranch = session('selected_branch', $userBranch);
 
         // Get request inputs
         $timePeriod = $request->input('time_period', 'month');
@@ -1086,9 +1149,9 @@ class BookingController extends Controller
                 $doctor = BkDoctor::find($selectedDoctor);
                 if ($doctor) {
                     $approvedQuery->whereRaw('LOWER(external_approveds.doctor_name) COLLATE utf8mb4_unicode_ci = ?', [strtolower($doctor->doctor_name)]);
-                    \Log::debug('External approved doctor filter applied', ['doctor_name' => $doctor->doctor_name]);
+                    Log::debug('External approved doctor filter applied', ['doctor_name' => $doctor->doctor_name]);
                 } else {
-                    \Log::warning('Doctor not found for filter', ['selected_doctor' => $selectedDoctor]);
+                    Log::warning('Doctor not found for filter', ['selected_doctor' => $selectedDoctor]);
                 }
             }
             if ($tracingStatus) {
@@ -1106,9 +1169,9 @@ class BookingController extends Controller
             }
 
             $approvedAppointments = $approvedQuery->get();
-            \Log::info('External approved appointments fetched', ['count' => $approvedAppointments->count()]);
+            Log::info('External approved appointments fetched', ['count' => $approvedAppointments->count()]);
             if ($selectedDoctor && $approvedAppointments->isEmpty()) {
-                \Log::warning('No external approved appointments found for doctor filter', [
+                Log::warning('No external approved appointments found for doctor filter', [
                     'selected_doctor' => $selectedDoctor,
                     'sample_doctor_names' => ExternalApproved::whereNotNull('doctor_name')->limit(5)->pluck('doctor_name')->toArray(),
                 ]);
@@ -1157,7 +1220,7 @@ class BookingController extends Controller
                 $pendingQuery->where('external_pending_approvals.specialization', $selectedSpecialization);
             }
             if ($selectedDoctor) {
-                \Log::warning('Doctor filter ignored for external_pending_approvals as doctor_id is not available');
+                Log::warning('Doctor filter ignored for external_pending_approvals as doctor_id is not available');
             }
             if ($tracingStatus) {
                 $pendingQuery->whereExists(function ($query) use ($tracingStatus) {
@@ -1174,7 +1237,7 @@ class BookingController extends Controller
             }
 
             $pendingAppointments = $pendingQuery->get();
-            \Log::info('External pending appointments fetched', ['count' => $pendingAppointments->count()]);
+            Log::info('External pending appointments fetched', ['count' => $pendingAppointments->count()]);
             $appointments = $appointments->merge($pendingAppointments);
         }
 
@@ -1968,26 +2031,16 @@ class BookingController extends Controller
 
         $user = Auth::guard('booking')->user();
 
-
         // Define user roles for clarity
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
 
         $userBranch = $user ? $user->hospital_branch : null;
-        $selectedBranch = null; // Default to no branch selected initially
-        $doctors = BkDoctor::where('hospital_branch', $userBranch)->get();
+        $selectedBranch = session('selected_branch', $userBranch); // Use session for branch selection
+        $doctors = BkDoctor::where('hospital_branch', $selectedBranch)->get();
 
-        if ($isSuperadmin && $status !== 'external_pending') {
-            $validationRules['branch'] = 'nullable|in:kijabe,westlands,naivasha,marira';
-            $request->validate($validationRules); // Validate here if branch is allowed
-            $selectedBranch = $request->input('branch'); // Superadmin can explicitly select
-        } else {
-            // Admins (and other users if any) are restricted to their assigned branch.
-            $request->validate($validationRules);
-            if ($status !== 'external_pending') {
-                $selectedBranch = $userBranch;
-            }
-        }
+        // Validate request
+        $request->validate($validationRules);
 
         $hasDateFilter = $request->filled('start_date') || $request->filled('end_date');
 
@@ -1998,13 +2051,13 @@ class BookingController extends Controller
             Carbon::parse($request->input('end_date'))->endOfDay()->toDateString() :
             Carbon::now()->endOfMonth()->toDateString();
 
-
         $hospitalBranches = $this->getHospitalBranchEnumValues();
 
         $data = [];
-        $specializations = BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
+        $specializations = BkSpecializations::where('hospital_branch', $selectedBranch)->orderBy('name')->get();
+
         if ($status) {
-            // --- Logic for specific appointment statuses (new, review, postop, rescheduled, external_pending, external_approved, cancelled) ---
+            // --- Logic for specific appointment statuses ---
             switch ($status) {
                 case 'new':
                 case 'review':
@@ -2037,12 +2090,9 @@ class BookingController extends Controller
                         ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                         ->where('bk_appointments.booking_type', $bookingType)
                         ->where('bk_appointments.appointment_status', '!=', 'rescheduled')
-                        ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate]);
-
-                    if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                        $query->where('bk_appointments.hospital_branch', $selectedBranch);
-                    }
-                    Log::info("Query built for {$status}. Has branch filter: " . ($selectedBranch ? 'Yes' : 'No'));
+                        ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate])
+                        ->where('bk_appointments.hospital_branch', $selectedBranch);
+                    Log::info("Query built for {$status}. Branch filter: {$selectedBranch}");
                     break;
 
                 case 'rescheduled':
@@ -2070,15 +2120,13 @@ class BookingController extends Controller
                             'c.created_at',
                             DB::raw('"rescheduled" as source_table'),
                         ])
-                        ->where('b.appointment_status', 'rescheduled')->whereBetween('c.appointment_date', [$startDate, $endDate]);
-
-                    if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                        $query->where(function ($q) use ($selectedBranch) {
+                        ->where('b.appointment_status', 'rescheduled')
+                        ->whereBetween('c.appointment_date', [$startDate, $endDate])
+                        ->where(function ($q) use ($selectedBranch) {
                             $q->where('b.hospital_branch', $selectedBranch)
                                 ->orWhere('c.hospital_branch', $selectedBranch);
                         });
-                    }
-                    Log::info("Query built for rescheduled. Has branch filter: " . ($selectedBranch ? 'Yes' : 'No'));
+                    Log::info("Query built for rescheduled. Branch filter: {$selectedBranch}");
                     break;
 
                 case 'external_pending':
@@ -2105,7 +2153,9 @@ class BookingController extends Controller
                             'created_at',
                             DB::raw('"external_pending" as source_table'),
                         ]);
-
+                    if ($userBranch !== 'kijabe') {
+                        $query->whereRaw('1 = 0');
+                    }
                     break;
 
                 case 'external_approved':
@@ -2135,10 +2185,10 @@ class BookingController extends Controller
                         ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
                         ->whereBetween('external_approveds.appointment_date', [$startDate, $endDate]);
 
-                    if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                        $query->where('external_approveds.hospital_branch', $selectedBranch);
+                    if ($userBranch !== 'kijabe') {
+                        $query->whereRaw('1 = 0');
                     }
-                    Log::info("Query built for external_approved. Has branch filter: " . ($selectedBranch ? 'Yes' : 'No'));
+                    Log::info("Query built for external_approved. Branch filter: {$selectedBranch}");
                     break;
 
                 case 'cancelled':
@@ -2160,16 +2210,16 @@ class BookingController extends Controller
                             'notes',
                             'cancellation_reason',
                             DB::raw('NULL as doctor_comments'),
-                            'hospital_branch', // Assuming this column exists for filtering
+                            'hospital_branch',
                             DB::raw('NULL as visit_date'),
                             'created_at',
                             DB::raw('"cancelled" as source_table'),
                         ])->whereBetween('appointment_date', [$startDate, $endDate]);
 
-                    if ((!$isSuperadmin || ($isSuperadmin && $selectedBranch)) && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+                    if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
                         $query->where('hospital_branch', $selectedBranch);
                     }
-
+                    Log::info("Query built for cancelled. Branch filter: {$selectedBranch}");
                     break;
 
                 case 'all':
@@ -2197,12 +2247,13 @@ class BookingController extends Controller
                             DB::raw('NULL as cancellation_reason'),
                             'bk_appointments.visit_date',
                             'bk_appointments.created_at',
-                            'bk_appointments.booking_type as source_table',
+                            DB::raw("CASE WHEN bk_appointments.booking_type = 'post_op' THEN 'postop' ELSE bk_appointments.booking_type END as source_table"),
                         ])
                         ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                         ->leftJoin('bk_rescheduled_appointments', 'bk_appointments.id', '=', 'bk_rescheduled_appointments.appointment_id')
                         ->leftJoin('bk_appointments as new_appointments', 'bk_rescheduled_appointments.re_appointment_id', '=', 'new_appointments.id')
-                        ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate]);
+                        ->whereBetween('bk_appointments.appointment_date', [$startDate, $endDate])
+                        ->where('bk_appointments.hospital_branch', $selectedBranch);
 
                     $pendingQuery = ExternalPendingApproval::query()
                         ->select([
@@ -2229,6 +2280,10 @@ class BookingController extends Controller
                             DB::raw('"external_pending_approvals" as source_table'),
                         ]);
 
+                    if ($userBranch !== 'kijabe') {
+                        $pendingQuery->whereRaw('1 = 0');
+                    }
+
                     $approvedQuery = ExternalApproved::query()
                         ->select([
                             'id',
@@ -2253,6 +2308,9 @@ class BookingController extends Controller
                             'created_at',
                             DB::raw('"external_approved" as source_table'),
                         ])->whereBetween('appointment_date', [$startDate, $endDate]);
+                    if ($userBranch !== 'kijabe') {
+                        $approvedQuery->whereRaw('1 = 0');
+                    }
 
                     $cancelledQuery = CancelledAppointment::query()
                         ->select([
@@ -2279,15 +2337,11 @@ class BookingController extends Controller
                             DB::raw('"cancelled" as source_table'),
                         ])->whereBetween('appointment_date', [$startDate, $endDate]);
 
-                    if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                        $internalQuery->where('bk_appointments.hospital_branch', $selectedBranch);
-                        $approvedQuery->where('hospital_branch', $selectedBranch);
-                        if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
-                            $cancelledQuery->where('hospital_branch', $selectedBranch);
-                        }
+                    if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+                        $cancelledQuery->where('hospital_branch', $selectedBranch);
                     }
 
-                    // Restrict external_pending to Kijabe for non-superadmins
+                    // Restrict external_pending to Kijabe
                     if (!$isSuperadmin && $userBranch !== 'kijabe') {
                         $pendingQuery->whereRaw('1 = 0');
                     }
@@ -2491,19 +2545,16 @@ class BookingController extends Controller
             $data['doctors'] = $doctors;
             $view = 'booking.appointments_list';
         } else {
-
             $baseQuery = BkAppointments::query()
                 ->selectRaw("
-                    SUM(CASE WHEN booking_type = 'new' THEN 1 ELSE 0 END) as new_count,
-                    SUM(CASE WHEN booking_type = 'review' THEN 1 ELSE 0 END) as review_count,
-                    SUM(CASE WHEN booking_type = 'post_op' THEN 1 ELSE 0 END) as postop_count
-                ")
+                SUM(CASE WHEN booking_type = 'new' THEN 1 ELSE 0 END) as new_count,
+                SUM(CASE WHEN booking_type = 'review' THEN 1 ELSE 0 END) as review_count,
+                SUM(CASE WHEN booking_type = 'post_op' THEN 1 ELSE 0 END) as postop_count
+            ")
                 ->where('appointment_status', '!=', 'rescheduled')
-                ->whereBetween('appointment_date', [$startDate, $endDate]);
+                ->whereBetween('appointment_date', [$startDate, $endDate])
+                ->where('hospital_branch', $selectedBranch);
 
-            if ($selectedBranch) {
-                $baseQuery->where('hospital_branch', $selectedBranch);
-            }
             $counts = $baseQuery->first();
 
             $data['totalNewAppointments'] = (int) ($counts->new_count ?? 0);
@@ -2514,37 +2565,31 @@ class BookingController extends Controller
                 ->join('bk_appointments as b', 'a.appointment_id', '=', 'b.id')
                 ->join('bk_appointments as c', 'a.re_appointment_id', '=', 'c.id')
                 ->where('b.appointment_status', 'rescheduled')
-                ->whereBetween('c.appointment_date', [$startDate, $endDate]);
-
-            if (!$isSuperadmin || ($isSuperadmin && $selectedBranch)) {
-                $rescheduledQuery->where(function ($q) use ($selectedBranch) {
+                ->whereBetween('c.appointment_date', [$startDate, $endDate])
+                ->where(function ($q) use ($selectedBranch) {
                     $q->where('b.hospital_branch', $selectedBranch)
                         ->orWhere('c.hospital_branch', $selectedBranch);
                 });
-            }
             $data['totalRescheduledAppointments'] = $rescheduledQuery->count();
 
-            // External pending count, restricted to Kijabe for non-superadmins
-            if (!$isSuperadmin && $userBranch !== 'kijabe') {
+            // External pending count, restricted to Kijabe
+            if ($userBranch !== 'kijabe') {
                 $data['totalExternalPendingAppointments'] = 0;
             } else {
                 $data['totalExternalPendingAppointments'] = ExternalPendingApproval::count();
             }
 
             // External approved count
-            $externalApprovedQuery = ExternalApproved::whereBetween('appointment_date', [$startDate, $endDate]);
-            if ($selectedBranch) {
-                $externalApprovedQuery->where('hospital_branch', $selectedBranch);
-            }
-            if (!$isSuperadmin && $userBranch !== 'kijabe') {
-                $externalApprovedQuery->whereRaw('1 = 0'); // Return empty result
+            $externalApprovedQuery = ExternalApproved::whereBetween('appointment_date', [$startDate, $endDate])
+                ->where('hospital_branch', $selectedBranch);
+            if ($userBranch !== 'kijabe') {
+                $externalApprovedQuery->whereRaw('1 = 0');
             }
             $data['totalExternalApprovedAppointments'] = $externalApprovedQuery->count();
 
-
-            // Cancelled: filter by branch if selectedBranch is defined and column exists
-            $cancelledQuery = CancelledAppointment::whereBetween('appointment_date', [$startDate, $endDate]);;
-            if ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+            // Cancelled: filter by branch if column exists
+            $cancelledQuery = CancelledAppointment::whereBetween('appointment_date', [$startDate, $endDate]);
+            if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
                 $cancelledQuery->where('hospital_branch', $selectedBranch);
             }
             $data['totalCancelledAppointments'] = $cancelledQuery->count();
@@ -2552,25 +2597,20 @@ class BookingController extends Controller
             $data['totalAppointments'] = $data['totalNewAppointments'] +
                 $data['totalReviewAppointments'] +
                 $data['totalPostopAppointments'] +
-                // $data['totalRescheduledAppointments'] +
                 $data['totalExternalPendingAppointments'] +
                 $data['totalExternalApprovedAppointments'] +
                 $data['totalCancelledAppointments'];
 
             // Specialization chart data
-            $specializationData = $specializations->map(function ($specialization) use ($isSuperadmin, $selectedBranch, $startDate, $endDate, $userBranch) {
+            $specializationData = $specializations->map(function ($specialization) use ($selectedBranch, $startDate, $endDate, $isSuperadmin, $userBranch) {
                 $apptQuery = BkAppointments::where('specialization', $specialization->id)
-                    ->whereBetween('appointment_date', [$startDate, $endDate]);
-                if ($selectedBranch) {
-                    $apptQuery->where('hospital_branch', $selectedBranch);
-                }
+                    ->whereBetween('appointment_date', [$startDate, $endDate])
+                    ->where('hospital_branch', $selectedBranch);
 
                 $externalApprovedSpecializationQuery = ExternalApproved::where('specialization', $specialization->name)
-                    ->whereBetween('appointment_date', [$startDate, $endDate]);
-                if ($selectedBranch) {
-                    $externalApprovedSpecializationQuery->where('hospital_branch', $selectedBranch);
-                }
-                if (!$isSuperadmin && $userBranch !== 'kijabe') {
+                    ->whereBetween('appointment_date', [$startDate, $endDate])
+                    ->where('hospital_branch', $selectedBranch);
+                if ($userBranch !== 'kijabe') {
                     $externalApprovedSpecializationQuery->whereRaw('1 = 0');
                 }
 
@@ -2578,7 +2618,7 @@ class BookingController extends Controller
 
                 $cancelledCount = CancelledAppointment::where('specialization', $specialization->name)
                     ->whereBetween('appointment_date', [$startDate, $endDate]);
-                if ($selectedBranch && DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+                if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
                     $cancelledCount = $cancelledCount->where('hospital_branch', $selectedBranch);
                 }
                 $cancelledCount = $cancelledCount->count();
@@ -2614,50 +2654,24 @@ class BookingController extends Controller
                 ]
             ];
 
-            // Branch chart data - only for superadmins or a single branch for admins
-            if ($isSuperadmin) {
-                $branchCounts = collect($hospitalBranches)->map(function ($branch) use ($startDate, $endDate) {
-                    $apptCount = BkAppointments::where('hospital_branch', $branch)
-                        ->whereBetween('appointment_date', [$startDate, $endDate])
-                        ->count();
-                    $externalApprovedCount = ExternalApproved::where('hospital_branch', $branch)
-                        ->whereBetween('appointment_date', [$startDate, $endDate])
-                        ->count();
-                    return [
-                        'name' => ucfirst($branch),
-                        'total' => $apptCount + $externalApprovedCount
-                    ];
-                })->filter()->sortByDesc('total');
-
-                $data['branchLabels'] = $branchCounts->pluck('name')->toArray();
-                $data['branchChartData'] = [
-                    [
-                        'label' => 'Appointments by Branch',
-                        'data' => $branchCounts->pluck('total')->toArray(),
-                        'backgroundColor' => ['#28a745', '#007bff', '#ffc107', '#dc3545'],
-                        'borderColor' => '#ffffff',
-                        'borderWidth' => 1
-                    ]
-                ];
-            } else {
-                $data['branchLabels'] = [ucfirst($selectedBranch)];
-                $data['branchChartData'] = [
-                    [
-                        'label' => 'Appointments for ' . ucfirst($selectedBranch),
-                        'data' => [
-                            BkAppointments::where('hospital_branch', $selectedBranch)
-                                ->whereBetween('appointment_date', [$startDate, $endDate])
-                                ->count() +
-                                ExternalApproved::where('hospital_branch', $selectedBranch)
-                                ->whereBetween('appointment_date', [$startDate, $endDate])
-                                ->count()
-                        ],
-                        'backgroundColor' => ['#28a745'],
-                        'borderColor' => '#ffffff',
-                        'borderWidth' => 1
-                    ]
-                ];
-            }
+            // Branch chart data
+            $data['branchLabels'] = [ucfirst($selectedBranch)];
+            $data['branchChartData'] = [
+                [
+                    'label' => 'Appointments for ' . ucfirst($selectedBranch),
+                    'data' => [
+                        BkAppointments::where('hospital_branch', $selectedBranch)
+                            ->whereBetween('appointment_date', [$startDate, $endDate])
+                            ->count() +
+                            ExternalApproved::where('hospital_branch', $selectedBranch)
+                            ->whereBetween('appointment_date', [$startDate, $endDate])
+                            ->count()
+                    ],
+                    'backgroundColor' => ['#28a745'],
+                    'borderColor' => '#ffffff',
+                    'borderWidth' => 1
+                ]
+            ];
 
             $data['hospitalBranches'] = $hospitalBranches;
             $data['selectedBranch'] = $selectedBranch;
@@ -2670,179 +2684,6 @@ class BookingController extends Controller
 
         return view($view, $data);
     }
-    // Internal booking submit
-    // public function submitInternalAppointments(Request $request)
-    // {
-    //     $consents = $request->input('consent', []);
-    //     $validated = $request->validate([
-    //         'full_name' => 'required|string|max:255',
-    //         'patient_number' => 'required|string|max:50',
-    //         'email' => 'nullable|email|max:100',
-    //         'appointment_date' => 'required|date',
-    //         'appointment_time' => 'nullable',
-    //         'specialization' => 'required|string|max:255',
-    //         'doctor_name' => 'nullable|string|max:100',
-    //         'booking_type' => 'required|in:new,post_op,review',
-    //         'phone' => 'required|string|max:100',
-    //         'hospital_branch' => 'required|in:kijabe,naivasha,westlands,marira',
-    //     ]);
-
-    //     $bkspecialization = BkSpecializations::where('name', $validated['specialization'])
-    //         ->where('hospital_branch', $validated['hospital_branch'])
-    //         ->first();
-
-    //     $doctor = BkDoctor::where('doctor_name', $validated['doctor_name'])
-    //         ->where('hospital_branch', $validated['hospital_branch'])
-    //         ->first();
-    //     $doctor_id = $doctor ? $doctor->id : null;
-
-    //     if (!$bkspecialization) {
-    //         return back()->withInput()->with('error', 'Specialization not found.');
-    //     }
-
-    //     // Check booking limits
-    //     $appointmentDate = $validated['appointment_date'];
-    //     $currentBookings = $this->getActiveBookingsForDate($validated['specialization'], $appointmentDate);
-
-    //     if ($bkspecialization->limits && $currentBookings >= $bkspecialization->limits) {
-    //         $errorMessage = "Cannot book appointment. The daily limit of {$bkspecialization->limits} appointments for {$validated['specialization']} on " .
-    //             date('Y-m-d', strtotime($appointmentDate)) . " has been reached. Current bookings: {$currentBookings}.";
-
-    //         // Fetch alternative dates
-    //         //$alternativeDates = $this ->getAlternativeDates($validated['specialization'], $validated['hospital_branch'], $bkspecialization->limits);
-    //         $alternativeDates = $this->getAlternativeDates($validated['specialization'], $validated['hospital_branch'], $bkspecialization->limits, $bkspecialization->day_of_week, $appointmentDate);
-
-    //         \Log::warning("Appointment booking limit exceeded", [
-    //             'specialization' => $validated['specialization'],
-    //             'date' => $appointmentDate,
-    //             'current_bookings' => $currentBookings,
-    //             'limit' => $bkspecialization->limits,
-    //             'hospital_branch' => $validated['hospital_branch'],
-    //             'suggested_dates' => $alternativeDates,
-    //         ]);
-
-    //         return back()->withInput()->with([
-    //             'error' => $errorMessage,
-    //             'suggested_dates' => $alternativeDates,
-    //         ]);
-    //     }
-
-    //     try {
-    //         $appointmentNumber = 'APPT-' . date('Y') . '-' . Str::upper(Str::random(8));
-    //         $appointmentData = [
-    //             'appointment_number' => $appointmentNumber,
-    //             'full_name' => $validated['full_name'],
-    //             'patient_number' => $validated['patient_number'],
-    //             'email' => $validated['email'],
-    //             'phone' => $validated['phone'],
-    //             'appointment_date' => $validated['appointment_date'],
-    //             'appointment_time' => $validated['appointment_time'] . ':00',
-    //             'specialization' => $bkspecialization->id,
-    //             'doctor_name' => $validated['doctor_name'],
-    //             'hospital_branch' => $validated['hospital_branch'],
-    //             'booking_type' => $validated['booking_type'],
-    //             'appointment_status' => 'pending',
-    //             'consent' => isset($validated['consent']) ? implode(',', $validated['consent']) : null,
-    //             'sms_check' => in_array('sms', $consents) ? 1 : 0,
-    //             'whatsapp_check' => in_array('whatsapp', $consents) ? 1 : 0,
-    //             'email_check' => in_array('email', $consents) ? 1 : 0,
-    //             'doctor_id' => $doctor_id,
-    //         ];
-
-    //         $appointment = BkAppointments::create($appointmentData);
-
-    //         \Log::info("Internal appointment booked", [
-    //             'specialization' => $bkspecialization->name,
-    //             'date' => $validated['appointment_date'],
-    //             'appointment_id' => $appointment->id,
-    //             'hospital_branch' => $validated['hospital_branch'],
-    //             'bookings_after_creation' => $currentBookings + 1,
-    //             'limit' => $bkspecialization->limits,
-    //         ]);
-
-    //         return redirect()->back()->with('success', 'Appointment booked successfully!');
-    //     } catch (\Exception $e) {
-    //         Log::error('Appointment creation failed', ['error' => $e->getMessage()]);
-    //         return back()->withInput()->with('error', 'Failed to book appointment: ' . $e->getMessage());
-    //     }
-    // }
-
-
-    // private function getAlternativeDates($specialization, $hospital_branch, $limit, $day_of_week, $start_date)
-    // {
-    //     $suggestions = [];
-    //     $specialization_id = BkSpecializations::where('name', $specialization)
-    //         ->where('hospital_branch', $hospital_branch)
-    //         ->value('id');
-
-    //     // Define day map for Carbon day numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
-    //     $dayMap = [
-    //         'sunday' => 0,
-    //         'monday' => 1,
-    //         'tuesday' => 2,
-    //         'wednesday' => 3,
-    //         'thursday' => 4,
-    //         'friday' => 5,
-    //         'saturday' => 6,
-    //     ];
-
-    //     // Check if day_of_week is valid
-    //     $isDailyDefault = !isset($dayMap[strtolower($day_of_week ?? '')]);
-    //     $targetDayOfWeek = $isDailyDefault ? null : $dayMap[strtolower($day_of_week)];
-
-    //     // Parse the requested start_date
-    //     $currentDate = Carbon::parse($start_date)->startOfDay();
-
-    //     // Get existing bookings for future dates
-    //     $existingBookings = BkAppointments::selectRaw('appointment_date, COUNT(*) as total')
-    //         ->where('specialization', $specialization_id)
-    //         ->where('hospital_branch', $hospital_branch)
-    //         ->where('appointment_date', '>=', $currentDate)
-    //         ->where('appointment_status', '!=', 'rescheduled')
-    //         ->groupBy('appointment_date')
-    //         ->pluck('total', 'appointment_date')
-    //         ->toArray();
-
-    //     // Find the next five available dates
-    //     $count = 0;
-    //     for ($i = 0; $count < 5; $i++) {
-    //         // Calculate the next date
-    //         $nextDate = (clone $currentDate)->addDays($i + 1); // Start from the next day
-
-    //         // If a valid day_of_week is provided, adjust to the next occurrence of that day
-    //         if (!$isDailyDefault && $nextDate->dayOfWeek != $targetDayOfWeek) {
-    //             //$nextDate->next($targetDayOfWeek); // Move to the next occurrence of the target
-    //             $nextDate = (clone ($currentDate))->addDays(($i + 1) * 7); // Move to next week
-
-    //         }
-
-    //         $dateStr = $nextDate->format('Y-m-d');
-    //         $totalBookings = isset($existingBookings[$dateStr]) ? $existingBookings[$dateStr] : 0;
-
-    //         // Only include dates with available slots
-    //         if ($totalBookings < $limit) {
-    //             $suggestions[] = [
-    //                 'appointment_date' => $dateStr,
-    //                 'total' => $totalBookings,
-    //                 'day_of_week' => $nextDate->format('l'),
-    //                 'limit' => $limit,
-    //             ];
-    //             $count++;
-    //         }
-    //     }
-
-    //     return $suggestions;
-    // }
-
-
-    // private function getTotalActiveBookingsForDate($specialization, $date)
-    // {
-    //     return BkAppointments::where('specialization', BkSpecializations::where('name', $specialization)->value('id'))
-    //         ->where('appointment_date', $date)
-    //         ->where('appointment_status', '!=', 'rescheduled')
-    //         ->count();
-    // }
-
     public function submitInternalAppointments(Request $request)
     {
         $consents = $request->input('consent', []);
@@ -2882,7 +2723,7 @@ class BookingController extends Controller
         if (!in_array('daily', $allowedDays) && !in_array($selectedDay, $allowedDays)) {
             return $this->returnWithSuggestedDates(
                 $request,
-                "Booking is not allowed on this day for {$specialization->name}.",
+                "Booking is not allowed on " . Carbon::parse($appointmentDate)->format('F jS, Y') . " for {$specialization->name}.",
                 $specialization->id,
                 $appointmentDate,
                 $validated,
@@ -3064,27 +2905,6 @@ class BookingController extends Controller
 
         return redirect()->back()->with('success', 'Your appointment has been successfully submitted. Please note that the appointment is subject to change based on availability or unforeseen circumstances. You will be notified in case of any updates or adjustments.');
     }
-
-    // protected function findNextAvailableDate($specializationName, $startDate)
-    // {
-    //     $specialization = Specialization::where('name', $specializationName)->first();
-    //     if (!$specialization) {
-    //         return 'Specialization not found.';
-    //     }
-
-    //     $date = Carbon::parse($startDate)->addDay();
-
-    //     while ($date->lte(Carbon::now()->addDays(30))) {
-    //         $activeBookings = $this->getActiveBookingsForDate($specializationName, $date->toDateString());
-    //         if ($activeBookings < $specialization->daily_limit) {
-    //             return $date->toDateString();
-    //         }
-    //         $date->addDay();
-    //     }
-
-    //     return 'No available dates in the next 30 days.';
-    // }
-
     public function approveExternalAppointment(Request $request, $appointmentNumber)
     {
         Log::info('Attempting to approve appointment', ['appointment_number' => $appointmentNumber, 'input' => $request->all()]);
@@ -3132,7 +2952,7 @@ class BookingController extends Controller
         if (!in_array('daily', $allowedDays) && !in_array($selectedDay, $allowedDays)) {
             return $this->returnWithSuggestedDates(
                 $request,
-                "Booking is not allowed on this day for {$specialization->name}.",
+                "Booking is not allowed on " . Carbon::parse($appointmentDate)->format('F jS, Y') . " for {$specialization->name}.",
                 $specialization->id,
                 $appointmentDate,
                 $validated,
@@ -3262,20 +3082,53 @@ class BookingController extends Controller
         $isSuperadmin = $user && $user->role === 'superadmin';
         $isAdmin = $user && $user->role === 'admin';
         $userBranch = $user ? $user->hospital_branch : null;
+        $selectedBranch = session('selected_branch', $userBranch);
 
-        // $specializations = BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
-        $specializations = $isSuperadmin
-            ? BkSpecializations::orderBy('name')->get()
-            : BkSpecializations::where('hospital_branch', $userBranch)->orderBy('name')->get();
+        // Validate selected branch against switchable branches
+        if (!$isSuperadmin && $selectedBranch !== $userBranch) {
+            Log::warning('Invalid branch access attempt', [
+                'user_id' => $user->id,
+                'selected_branch' => $selectedBranch,
+                'user_branch' => $userBranch,
+            ]);
+            return response()->json(['error' => 'Unauthorized branch access.'], 403);
+        }
+        if ($isSuperadmin && !in_array($selectedBranch, $user->switchable_branches)) {
+            Log::warning('Superadmin attempted to access unauthorized branch', [
+                'user_id' => $user->id,
+                'selected_branch' => $selectedBranch,
+                'switchable_branches' => $user->switchable_branches,
+            ]);
+            return response()->json(['error' => 'Unauthorized branch access.'], 403);
+        }
+
+        // Fetch specializations based on selected branch
+        $specializations = BkSpecializations::where('hospital_branch', $selectedBranch)
+            ->orderBy('name')
+            ->get();
 
         $appointment = null;
         $source_table = request()->input('source_table', $status);
+
+        // Normalize status 
+        if ($status === 'post_op') {
+            $status = 'postop';
+        }
 
         // Validate and map status for external_pending_approvals
         if ($status === 'all' || $status === 'external_pending_approvals') {
             if ($source_table === 'external_pending_approvals') {
                 $status = 'external_pending'; // Map to external_pending for querying
             }
+        }
+
+        // Restrict external_pending to Kijabe
+        if ($status === 'external_pending' && $userBranch !== 'kijabe') {
+            Log::warning(' attempted to access external_pending outside Kijabe', [
+                'user_id' => $user->id,
+                'branch' => $userBranch,
+            ]);
+            return response()->json(['error' => 'Unauthorized access to external pending approvals.'], 403);
         }
 
         switch ($status) {
@@ -3289,10 +3142,13 @@ class BookingController extends Controller
                     ])
                     ->join('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                     ->where('bk_appointments.id', $id)
+                    ->where('bk_appointments.hospital_branch', $selectedBranch)
                     ->first();
                 break;
             case 'external_pending':
-                $appointment = ExternalPendingApproval::where('id', $id)->where('status', 'pending')->first();
+                $appointment = ExternalPendingApproval::where('id', $id)
+                    ->where('status', 'pending')
+                    ->first();
                 break;
             case 'external_approved':
                 $appointment = ExternalApproved::query()
@@ -3301,22 +3157,49 @@ class BookingController extends Controller
                         'bk_specializations.name as specialization',
                     ])
                     ->leftJoin('bk_specializations', 'external_approveds.specialization', '=', 'bk_specializations.name')
-                    ->where('external_approveds.id', $id)
-                    ->first();
+                    ->where('external_approveds.id', $id);
+                if ($userBranch !== 'kijabe') {
+                    $appointment->whereRaw('1 = 0');
+                };
+                $appointment = $appointment->first();
                 break;
             case 'cancelled':
-                $appointment = CancelledAppointment::find($id);
+                $appointment = CancelledAppointment::query()
+                    ->where('id', $id);
+                if (DB::getSchemaBuilder()->hasColumn('cancelled_appointments', 'hospital_branch')) {
+                    $appointment->where('hospital_branch', $selectedBranch);
+                }
+                $appointment = $appointment->first();
                 break;
             default:
-                Log::warning("Invalid status for view: {$status}", ['id' => $id, 'source_table' => $source_table]);
+                Log::warning("Invalid status for view: {$status}", [
+                    'id' => $id,
+                    'source_table' => $source_table,
+                    'selected_branch' => $selectedBranch,
+                ]);
                 return response()->json(['error' => 'Invalid status provided.'], 400);
         }
 
         if (!$appointment) {
-            Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
+            Log::error('Appointment not found', [
+                'id' => $id,
+                'status' => $status,
+                'source_table' => $source_table,
+                'selected_branch' => $selectedBranch,
+            ]);
             return response()->json(['error' => 'Appointment not found.'], 404);
         }
 
+        // Verify appointment belongs to the selected branch (except for external_pending)
+        if ($status !== 'external_pending' && !in_array($appointment->hospital_branch ?? null, [$selectedBranch, null])) {
+            Log::warning('Appointment branch mismatch', [
+                'user_id' => $user->id,
+                'appointment_id' => $id,
+                'appointment_branch' => $appointment->hospital_branch,
+                'selected_branch' => $selectedBranch,
+            ]);
+            return response()->json(['error' => 'Appointment does not belong to the selected branch.'], 403);
+        }
         // Add source_table to appointment for frontend use
         $appointment->source_table = $source_table;
 
@@ -3324,10 +3207,11 @@ class BookingController extends Controller
             'email' => $appointment->email ?? 'Not set',
             'doctor_comments' => $appointment->doctor_comments ?? 'Not set',
             'specialization' => $appointment->specialization ?? 'Not set',
+            'selected_branch' => $selectedBranch,
         ]);
 
         // Render the modal body
-        $bodyHtml = view('booking.view', compact('appointment', 'status', 'specializations'))->render();
+        $bodyHtml = view('booking.view', compact('appointment', 'status', 'specializations', 'selectedBranch', 'isSuperadmin', 'isAdmin'))->render();
 
         // Render the footer buttons dynamically
         $footerHtml = '
@@ -3356,48 +3240,55 @@ class BookingController extends Controller
             </form>';
         }
 
-        // Add Delete button
-        $footerHtml .= '
-        <form action="' . route('booking.delete', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '" method="POST" style="display: inline-block;" class="appointment-form" onsubmit="return confirm(\'Are you sure you want to delete this appointment? This action cannot be undone.\');">
-            ' . csrf_field() . '
-            ' . method_field('DELETE') . '
-            <input type="hidden" name="status" value="' . ($status === 'all' ? $appointment->source_table : $status) . '">
-            <button type="submit" class="btn btn-sm" style="background-color: #dc3545;"><i class="fas fa-trash-alt"></i> Delete</button>
-        </form>';
+        // Add Delete button (only if user has write permission for the branch)
+        if (isset($user->branch_permissions[$selectedBranch]) && $user->branch_permissions[$selectedBranch] === 'read-write') {
+            $footerHtml .= '
+            <form action="' . route('booking.delete', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '" method="POST" style="display: inline-block;" class="appointment-form" onsubmit="return confirm(\'Are you sure you want to delete this appointment? This action cannot be undone.\');">
+                ' . csrf_field() . '
+                ' . method_field('DELETE') . '
+                <input type="hidden" name="status" value="' . ($status === 'all' ? $appointment->source_table : $status) . '">
+                <button type="submit" class="btn btn-sm" style="background-color: #dc3545;"><i class="fas fa-trash-alt"></i> Delete</button>
+            </form>';
+        }
 
         // Add Cancel button (non-cancelled appointments)
         if (
             !Route::is('booking.reminders') &&
             ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled')) &&
             ($appointment->appointment_status ?? '') !== 'cancelled' &&
-            ($appointment->appointment_status ?? '') !== 'rescheduled'
+            ($appointment->appointment_status ?? '') !== 'rescheduled' &&
+            isset($user->branch_permissions[$selectedBranch]) && $user->branch_permissions[$selectedBranch] === 'read-write'
         ) {
             $footerHtml .= '
-        <button type="button" class="btn btn-sm cancel-appointment" style="background-color: #6c757d;" 
-                data-id="' . $appointment->id . '" 
-                data-source-table="' . ($status === 'all' ? $appointment->source_table : $status) . '" 
-                data-full-name="' . ($appointment->full_name ?? 'N/A') . '" 
-                data-patient-number="' . ($appointment->patient_number ?? 'N/A') . '">
-                <i class="fas fa-ban"></i> Cancel
-        </button>';
+            <button type="button" class="btn btn-sm cancel-appointment" style="background-color: #6c757d;" 
+                    data-id="' . $appointment->id . '" 
+                    data-source-table="' . ($status === 'all' ? $appointment->source_table : $status) . '" 
+                    data-full-name="' . ($appointment->full_name ?? 'N/A') . '" 
+                    data-patient-number="' . ($appointment->patient_number ?? 'N/A') . '">
+                    <i class="fas fa-ban"></i> Cancel
+            </button>';
         }
 
         // Add Reschedule button (non-cancelled appointments)
-        if ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled') && ($appointment->appointment_status ?? '') !== 'cancelled') {
+        if (
+            ($status !== 'cancelled' && ($status !== 'all' || $appointment->source_table !== 'cancelled')) &&
+            ($appointment->appointment_status ?? '') !== 'cancelled' &&
+            isset($user->branch_permissions[$selectedBranch]) && $user->branch_permissions[$selectedBranch] === 'read-write'
+        ) {
             $footerHtml .= '
             <button type="button" class="btn btn-sm btn-info openRescheduleModal" style="background-color: #6c757d;" data-bs-toggle="modal" data-bs-target="#rescheduleAppointmentModal"
-                data-action="' . route('booking.reschedule', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '"
-                data-id="' . $appointment->id . '"
-                data-full_name="' . ($appointment->full_name ?? '') . '"
-                data-patient_number="' . ($appointment->patient_number ?? '') . '"
-                data-email="' . ($appointment->email ?? '') . '"
-                data-phone="' . ($appointment->phone ?? '') . '"
-                data-appointment_date="' . ($appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '') . '"
-                data-appointment_time="' . ($appointment->appointment_time ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i') : '') . '"
-                data-specialization="' . ($appointment->specialization ?? '') . '"
-                data-doctor_name="' . ($appointment->doctor_name ?? $appointment->doctor ?? '') . '"
-                data-booking_type="' . ($appointment->booking_type ?? '') . '">
-                <i class="fas fa-calendar-alt"></i> Reschedule
+                    data-action="' . route('booking.reschedule', [$appointment->id, $status === 'all' ? $appointment->source_table : $status]) . '"
+                    data-id="' . $appointment->id . '"
+                    data-full_name="' . ($appointment->full_name ?? '') . '"
+                    data-patient_number="' . ($appointment->patient_number ?? '') . '"
+                    data-email="' . ($appointment->email ?? '') . '"
+                    data-phone="' . ($appointment->phone ?? '') . '"
+                    data-appointment_date="' . ($appointment->appointment_date ? \Carbon\Carbon::parse($appointment->appointment_date)->format('Y-m-d') : '') . '"
+                    data-appointment_time="' . ($appointment->appointment_time ? \Carbon\Carbon::parse($appointment->appointment_time)->format('H:i') : '') . '"
+                    data-specialization="' . ($appointment->specialization ?? '') . '"
+                    data-doctor_name="' . ($appointment->doctor_name ?? $appointment->doctor ?? '') . '"
+                    data-booking_type="' . ($appointment->booking_type ?? '') . '">
+                    <i class="fas fa-calendar-alt"></i> Reschedule
             </button>';
         }
 
@@ -3407,10 +3298,11 @@ class BookingController extends Controller
                 'footer' => $footerHtml,
                 'appointment' => $appointment,
                 'status' => $status,
+                'selected_branch' => $selectedBranch,
             ]);
         }
 
-        return view('booking.view', compact('appointment', 'status', 'specializations'));
+        return view('booking.view', compact('appointment', 'status', 'specializations', 'selectedBranch', 'isSuperadmin', 'isAdmin'));
     }
     public function edit($id, $status)
     {
@@ -3447,10 +3339,14 @@ class BookingController extends Controller
     public function update(Request $request, $id)
     {
         $source_table = $request->input('source_table');
-        $status = $request->input('status', $source_table); // Fallback to source_table if status is not provided
+        if ($source_table === 'post_op') {
+            $source_table = 'postop';
+            $request->merge(['source_table' => 'postop']);
+        }
+        $status = $request->input('status', $source_table); // Fallback 
         $form_type = $request->input('form_type');
         $hospitalBranches = $this->getHospitalBranchEnumValues(); // Ensure this method exists
-        // Log request data for debugging
+        // Log request data
         Log::info('Update request data:', [
             'id' => $id,
             'source_table' => $source_table,
@@ -3510,14 +3406,14 @@ class BookingController extends Controller
         };
 
         if (!$modelClass) {
-            \Log::error('Invalid source table', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
+            Log::error('Invalid source table', ['id' => $id, 'status' => $status, 'source_table' => $source_table]);
             return redirect()->back()->with('error', 'Invalid appointment source.');
         }
 
         // Find the appointment
         $appointment = $modelClass::find($id);
         if (!$appointment) {
-            \Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'source_table' => $source_table, 'model' => $modelClass]);
+            Log::error('Appointment not found', ['id' => $id, 'status' => $status, 'source_table' => $source_table, 'model' => $modelClass]);
             return redirect()->back()->with('error', 'Appointment not found.');
         }
 
@@ -3612,7 +3508,7 @@ class BookingController extends Controller
                 $newTableStatus = $source_table;
             }
 
-            \Log::info("Appointment updated/moved", [
+            Log::info("Appointment updated/moved", [
                 'id' => $id,
                 'original_status' => $status,
                 'source_table' => $source_table,
@@ -3627,7 +3523,7 @@ class BookingController extends Controller
                 ->with('success', 'Appointment updated successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Failed to update appointment', [
+            Log::error('Failed to update appointment', [
                 'id' => $id,
                 'status' => $status,
                 'source_table' => $source_table,
@@ -3663,11 +3559,11 @@ class BookingController extends Controller
         $appointment = $modelClass::find($id);
 
         if (!$appointment) {
-            \Log::error('Appointment not found for cancellation', ['id' => $id, 'status' => $status]);
+            Log::error('Appointment not found for cancellation', ['id' => $id, 'status' => $status]);
             return redirect()->back()->with('error', 'Appointment not found.');
         }
 
-        \DB::beginTransaction();
+        DB::beginTransaction();
 
         try {
             $cancelledData = [
@@ -3692,10 +3588,10 @@ class BookingController extends Controller
 
             if (empty($cancelledData['patient_number'])) {
                 $cancelledData['patient_number'] = 'UNKNOWN-' . Str::random(8);
-                \Log::warning('Patient number was empty; assigned a default value', ['id' => $id, 'status' => $status]);
+                Log::warning('Patient number was empty; assigned a default value', ['id' => $id, 'status' => $status]);
             }
 
-            \Log::debug('Creating CancelledAppointment record', $cancelledData);
+            Log::debug('Creating CancelledAppointment record', $cancelledData);
 
             $cancelledAppointment = new CancelledAppointment();
             foreach ($cancelledData as $key => $value) {
@@ -3709,7 +3605,7 @@ class BookingController extends Controller
                 throw new \Exception('Failed to save cancelled appointment to the database.');
             }
 
-            \Log::debug('CancelledAppointment record created', $savedCancelled->toArray());
+            Log::debug('CancelledAppointment record created', $savedCancelled->toArray());
 
             // Prepare email data
             $emailData = $cancelledData;
@@ -3719,14 +3615,14 @@ class BookingController extends Controller
             // Send cancellation email
             if ($cancelledAppointment->email && $cancelledAppointment->email !== 'N/A') {
                 Mail::to($cancelledAppointment->email)->send(new ContactFormMail($emailData));
-                \Log::info("Cancellation email sent to {$cancelledAppointment->email} for appointment ID: {$cancelledAppointment->id}");
+                Log::info("Cancellation email sent to {$cancelledAppointment->email} for appointment ID: {$cancelledAppointment->id}");
             }
 
             $appointment->delete();
 
-            \DB::commit();
+            DB::commit();
 
-            \Log::info('Appointment cancelled successfully', [
+            Log::info('Appointment cancelled successfully', [
                 'id' => $cancelledAppointment->id,
                 'booking_id' => $cancelledAppointment->booking_id,
             ]);
@@ -3734,9 +3630,9 @@ class BookingController extends Controller
             return redirect()->route('booking.dashboard.status', 'cancelled')
                 ->with('success', 'Appointment cancelled successfully.');
         } catch (\Exception $e) {
-            \DB::rollBack();
+            DB::rollBack();
 
-            \Log::error('Failed to cancel appointment', [
+            Log::error('Failed to cancel appointment', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'input' => $request->all(),
@@ -3769,7 +3665,7 @@ class BookingController extends Controller
         };
 
         if (!$modelClass) {
-            \Log::error('Invalid status for marking appointments as came', ['status' => $status, 'ids' => $ids]);
+            Log::error('Invalid status for marking appointments as came', ['status' => $status, 'ids' => $ids]);
             return response()->json(['error' => "Invalid appointment status: {$status}"], 400);
         }
 
@@ -3778,7 +3674,7 @@ class BookingController extends Controller
             // Check if IDs exist in the table
             $existingIds = $modelClass::whereIn('id', $ids)->pluck('id')->toArray();
             if (empty($existingIds)) {
-                \Log::warning('No matching appointments found for update', [
+                Log::warning('No matching appointments found for update', [
                     'status' => $status,
                     'ids' => $ids,
                     'model' => $modelClass,
@@ -3792,7 +3688,7 @@ class BookingController extends Controller
                 ->toArray();
 
             if (count($nonUpdatableIds) === count($ids)) {
-                \Log::warning('All selected appointments are already honoured or cancelled', [
+                Log::warning('All selected appointments are already honoured or cancelled', [
                     'status' => $status,
                     'ids' => $ids,
                     'non_updatable_ids' => $nonUpdatableIds,
@@ -3804,7 +3700,7 @@ class BookingController extends Controller
                 ->whereNotIn('appointment_status', ['honoured', 'cancelled'])
                 ->update(['appointment_status' => 'honoured']);
 
-            \Log::info("Appointments marked as honoured", [
+            Log::info("Appointments marked as honoured", [
                 'status' => $status,
                 'ids' => $ids,
                 'existing_ids' => $existingIds,
@@ -3820,7 +3716,7 @@ class BookingController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Failed to mark appointments as came', [
+            Log::error('Failed to mark appointments as came', [
                 'error' => $e->getMessage(),
                 'status' => $status,
                 'ids' => $ids,
@@ -4432,6 +4328,10 @@ class BookingController extends Controller
         for ($date = $startDate; $date <= $endDate && count($suggestedDates) < 10; $date->addDay()) {
             $dayLower = strtolower($date->format('l'));
 
+            if (in_array($dayLower, ['saturday', 'sunday'])) {
+                continue;
+            }
+
             if (in_array('daily', $allowedDays) || in_array($dayLower, $allowedDays)) {
                 $dateLimit = BkSpecializationDateLimits::where('specialization_id', $specializationId)
                     ->where('date', $date->toDateString())
@@ -4504,28 +4404,18 @@ class BookingController extends Controller
     {
         $suggestedDates = $this->getSuggestedDates($specializationId, $appointmentDate);
 
-        // Update form data with suggested date if available
-        $oldInputData = $formData;
-        $oldInputData['appointment_date'] = !empty($suggestedDates) ? $suggestedDates[0]['date'] : null;
-
-        // Store data in session
-        $request->session()->flashInput($oldInputData);
-        $request->session()->flash('error', $errorMessage);
-        $request->session()->flash('suggested_dates', $suggestedDates);
-        $request->session()->flash('modal_context', $context);
-        $request->session()->flash('modal_target', 'suggestedDatesModal');
-        foreach ($additionalData as $key => $value) {
-            $request->session()->flash($key, $value);
-        }
-
-        // Return the modal view
-        return view('booking.suggested_dates_modal', [
+        // Pass all necessary data directly to the view.
+        // The session data is not needed for a separate page.
+        $dataToPass = [
             'error' => $errorMessage,
             'suggested_dates' => $suggestedDates,
             'context' => $context,
+            'form_data' => $formData, // Pass the original form data to the new page
             'appointment_id' => $additionalData['appointment_id'] ?? null,
             'specialization_id' => $additionalData['specialization_id'] ?? null,
-        ]);
+        ];
+
+        return view('booking.suggested_dates', $dataToPass);
     }
     private function getDefaultLimit()
     {
@@ -4584,7 +4474,7 @@ class BookingController extends Controller
         $selectedBranch = $isSuperadmin ? $request->input('branch', $userBranch) : $userBranch;
         $action = $request->input('action');
 
-        \Log::info('Calendar Request', [
+        Log::info('Calendar Request', [
             'viewMode' => $viewMode,
             'date' => $date,
             'search' => $search,
@@ -4601,7 +4491,7 @@ class BookingController extends Controller
         // Handle AJAX request for doctors
         if ($request->ajax() && $action === 'get_doctors') {
             $doctors = $this->getDoctorsByBranch($selectedBranch);
-            \Log::debug('Returning doctors for AJAX request', [
+            Log::debug('Returning doctors for AJAX request', [
                 'success' => true,
                 'doctors_count' => count($doctors),
                 'doctors_sample' => array_slice($doctors, 0, 3),
@@ -4617,7 +4507,7 @@ class BookingController extends Controller
         if ($request->ajax()) {
             $appointments = $this->getAllAppointmentsForCalendar($date, $viewMode, $search, $selectedBranch, $doctorId, $doctorName);
             $bookingsData = $this->calculateBookingsData($appointments, $viewMode, $date);
-            \Log::debug('Returning calendar data for AJAX request', [
+            Log::debug('Returning calendar data for AJAX request', [
                 'calendar_data_count' => count($bookingsData),
                 'appointments_count' => count($appointments),
                 'date' => $date,
@@ -5251,55 +5141,82 @@ class BookingController extends Controller
         // Check if this branch actually has data
         if (!in_array($branchName, $actualBranches)) {
             Log::warning("No data found for branch: {$branchName}. Available branches with data: " . implode(', ', $actualBranches));
-            // Continue anyway - might be a valid branch with no appointments yet
         }
 
         // Access control
-        if ($userRole === 'superadmin') {
-            Log::info("Admin access granted for branch: {$branchName}");
-        } else {
-            // Non-admin users can only see their own branch
-            if ($userBranch !== $branchName) {
-                Log::warning("Access denied: User from {$userBranch} trying to access {$branchName}");
-                return redirect()->route('booking.dashboard')
-                    ->with('error', 'Access denied. You can only view your branch data.');
-            }
-            Log::info("User access granted for own branch: {$branchName}");
+        if ($userRole !== 'superadmin' && $userBranch !== $branchName) {
+            Log::warning("Access denied: User from {$userBranch} trying to access {$branchName}");
+            return redirect()->route('booking.dashboard')
+                ->with('error', 'Access denied. You can only view your branch data.');
         }
+        Log::info($userRole === 'superadmin' ? "Admin access granted for branch: {$branchName}" : "User access granted for own branch: {$branchName}");
 
         try {
-            // Build the query for bk_appointments table
+            // Build the query for bk_appointments table with join to bk_specializations
             $query = DB::table('bk_appointments')
+                ->leftJoin('bk_specializations', 'bk_appointments.specialization', '=', 'bk_specializations.id')
                 ->select([
-                    'id',
-                    'appointment_number',
-                    'full_name',
-                    'patient_number',
-                    'email',
-                    'phone',
-                    'appointment_date',
-                    'appointment_time',
-                    'specialization',
-                    'doctor_name as doctor',
-                    'booking_type',
-                    'appointment_status',
-                    'doctor_comments',
-                    'hospital_branch',
-                    'created_at',
-                    'rescheduled',
-                    'reminder_cleared',
-                    'visit_status',
-                    'visit_date',
-                    'hmis_visit_date',
-                    'hmis_department',
-                    'hmis_appointment_purpose',
-                    'hmis_doctor',
-                    'hmis_county',
-                    'hmis_visit_status'
+                    'bk_appointments.id',
+                    'bk_appointments.appointment_number',
+                    'bk_appointments.full_name',
+                    'bk_appointments.patient_number',
+                    'bk_appointments.email',
+                    'bk_appointments.phone',
+                    'bk_appointments.appointment_date',
+                    'bk_appointments.appointment_time',
+                    'bk_appointments.specialization as specialization_id',
+                    'bk_specializations.name as specialization',
+                    'bk_appointments.doctor_name as doctor',
+                    'bk_appointments.booking_type',
+                    'bk_appointments.appointment_status',
+                    'bk_appointments.doctor_comments',
+                    'bk_appointments.hospital_branch',
+                    'bk_appointments.created_at',
+                    'bk_appointments.rescheduled',
+                    'bk_appointments.reminder_cleared',
+                    'bk_appointments.visit_status',
+                    'bk_appointments.visit_date',
+                    'bk_appointments.hmis_visit_date',
+                    'bk_appointments.hmis_department',
+                    'bk_appointments.hmis_appointment_purpose',
+                    'bk_appointments.hmis_doctor',
+                    'bk_appointments.hmis_county',
+                    'bk_appointments.hmis_visit_status'
                 ])
-                ->where('hospital_branch', $branchName)
-                ->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'asc');
+                ->where('bk_appointments.hospital_branch', $branchName);
+
+            // Default to current month if no date filters provided
+            $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+            $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+            $search = $request->input('search');
+
+            // Apply date filters
+            if ($startDate) {
+                $query->whereDate('bk_appointments.appointment_date', '>=', $startDate);
+            }
+            if ($endDate) {
+                $query->whereDate('bk_appointments.appointment_date', '<=', $endDate);
+            }
+
+            // Apply search filter
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('bk_appointments.appointment_number', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.full_name', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.patient_number', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.email', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.phone', 'like', "%{$search}%")
+                        ->orWhere('bk_specializations.name', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.doctor_name', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.booking_type', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.appointment_status', 'like', "%{$search}%")
+                        ->orWhere('bk_appointments.doctor_comments', 'like', "%{$search}%");
+                });
+            }
+
+            // Order the results
+            $query->orderBy('bk_appointments.appointment_date', 'desc')
+                ->orderBy('bk_appointments.appointment_time', 'asc');
 
             Log::info("SQL Query: " . $query->toSql());
             Log::info("Query Bindings: ", $query->getBindings());
@@ -5311,15 +5228,12 @@ class BookingController extends Controller
 
             // Debug the results
             if ($appointments->isNotEmpty()) {
-                // Log booking type distribution
                 $bookingTypes = $appointments->groupBy('booking_type')->map->count();
                 Log::info("Booking type distribution:", $bookingTypes->toArray());
 
-                // Log appointment status distribution  
                 $statusDistribution = $appointments->groupBy('appointment_status')->map->count();
                 Log::info("Appointment status distribution:", $statusDistribution->toArray());
 
-                // Sample appointments for debugging
                 $sampleAppointments = $appointments->take(3)->map(function ($apt) {
                     return [
                         'id' => $apt->id,
@@ -5328,23 +5242,15 @@ class BookingController extends Controller
                         'hospital_branch' => $apt->hospital_branch,
                         'booking_type' => $apt->booking_type,
                         'appointment_date' => $apt->appointment_date,
-                        'appointment_status' => $apt->appointment_status
+                        'appointment_status' => $apt->appointment_status,
+                        'specialization' => $apt->specialization
                     ];
                 });
                 Log::info("Sample appointments:", $sampleAppointments->toArray());
             } else {
                 Log::warning("No appointments found for branch: {$branchName}");
-
-                // Check if any appointments exist at all
                 $totalAppointments = DB::table('bk_appointments')->count();
                 Log::info("Total appointments in database: {$totalAppointments}");
-
-                if ($totalAppointments > 0) {
-                    Log::info("Appointments exist but none for branch: {$branchName}");
-                    Log::info("This might be normal if this branch has no appointments yet.");
-                } else {
-                    Log::warning("No appointments found in entire bk_appointments table!");
-                }
             }
         } catch (\Exception $e) {
             Log::error("Query failed for branch {$branchName}: " . $e->getMessage(), [
@@ -5437,39 +5343,9 @@ class BookingController extends Controller
             return response()->stream($callback, 200, $headers);
         }
 
-        // Get specializations (assuming you have a specializations table)
-        $specializations = [];
-        try {
-            // Try to get from bk_specialization table first
-            $specializations = DB::table('bk_specialization')->get();
-            Log::info("Fetched specializations from bk_specialization table: " . $specializations->count());
-        } catch (\Exception $e) {
-            Log::warning("Could not fetch specializations from bk_specialization table: " . $e->getMessage());
-
-            // Fallback: Get unique specializations from appointments
-            $rawSpecializations = DB::table('bk_appointments')
-                ->select('specialization')
-                ->distinct()
-                ->whereNotNull('specialization')
-                ->get();
-
-            // Transform to consistent structure with 'name' property
-            $specializations = $rawSpecializations->map(function ($item) {
-                return (object) ['name' => $item->specialization];
-            });
-
-            Log::info("Fetched specializations from bk_appointments table: " . $specializations->count());
-        }
-
-        // Ensure we always have a collection of objects with 'name' property
-        $specializations = collect($specializations)->map(function ($item) {
-            // If it already has 'name', keep it. Otherwise, create it from 'specialization'
-            if (isset($item->name)) {
-                return $item;
-            } else {
-                return (object) ['name' => $item->specialization ?? ''];
-            }
-        });
+        // Get specializations
+        $specializations = DB::table('bk_specializations')->get();
+        Log::info("Fetched specializations from bk_specializations table: " . $specializations->count());
 
         // Prepare data for the view
         $data = [
@@ -5484,9 +5360,11 @@ class BookingController extends Controller
             'userRole' => $userRole,
             'appointmentsCount' => $appointments->count(),
             'branchCounts' => $branchCounts ?? [],
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'search' => $search
         ];
 
-        Log::info("=== BRANCH DASHBOARD DEBUG END ===");
         Log::info("Final data being passed to view:", [
             'title' => $data['title'],
             'appointments_count' => $appointments->count(),
@@ -5499,12 +5377,11 @@ class BookingController extends Controller
 
         return view('booking.branch', $data);
     }
+
     protected function getHospitalBranchEnumValues()
     {
         try {
-            // Get enum values from bk_appointments table
             $result = DB::select("SHOW COLUMNS FROM bk_appointments WHERE Field = 'hospital_branch'");
-
             if (empty($result)) {
                 Log::warning('Could not fetch hospital_branch enum values from bk_appointments table');
                 return ['kijabe', 'naivasha', 'westlands', 'marira'];

@@ -10,6 +10,9 @@
             <h4 class="mb-0 d-flex align-items-center">
                 <i class="fas fa-table me-2"></i>{{ $title }}
             </h4>
+            <button class="btn btn-sm btn-light d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileFilters" aria-expanded="false" aria-controls="mobileFilters">
+                <i class="fas fa-filter"></i> Filters
+            </button>
         </div>
 
         <div class="p-3 bg-light border-bottom">
@@ -247,7 +250,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Reusable Cancel Modal -->
         <div class="modal fade" id="cancelAppointmentModal" tabindex="-1" aria-labelledby="cancelAppointmentModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
@@ -287,8 +289,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Reusable Reschedule Modal -->
         <!-- Reusable Reschedule Modal -->
         <div class="modal fade" id="rescheduleAppointmentModal" tabindex="-1" aria-labelledby="rescheduleAppointmentModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -304,8 +304,6 @@
                             <input type="hidden" name="appointment_id" id="reschedule_appointment_id">
                             <input type="hidden" name="form_type" value="all_details">
                             <input type="hidden" name="hospital_branch" value="{{ old('hospital_branch', $appointment->hospital_branch ?? Auth::guard('booking')->user()->hospital_branch ?? 'kijabe') }}">
-                                
-
                             @if ($errors->any())
                             <div class="alert alert-danger m-3">
                                 <ul class="mb-0">
@@ -506,8 +504,7 @@
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
-
-
+    
     <script>
         $(document).ready(function() {
             console.log('Document ready, initializing scripts for status: {{ $status }}');

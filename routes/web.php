@@ -45,7 +45,6 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ShortCoursesController;
 use App\Http\Controllers\SimulationController;
 use App\Http\Controllers\SitemapController;
-use App\Http\Controllers\SmsController;
 use App\Http\Controllers\SmsIntergrationController;
 use App\Http\Controllers\StaffAuthController;
 use App\Http\Controllers\SuperAdmin\UserManagementController;
@@ -403,8 +402,8 @@ Route::get('/alerts/patients', [AlertController::class, 'getPatients'])->name('a
 
 Route::get('/booking/branch/{branch}', [App\Http\Controllers\BookingController::class, 'booked_branch'])->name('booking.branch');
 Route::get('/booking/doctor/diary', [BookingDoctorController::class, 'bookingDiary'])->middleware('web', 'auth.booking')->name('booking.doctor.diary');
-//SMS Integration Routes
 
+//SMS Integration Routes
 Route::match(['get', 'post'], '/booking/sms/reminders', [SmsIntergrationController::class, 'showBulk'])->name('booking.reminders');
 Route::get('/booking/sms/delivery-log', [SmsIntergrationController::class, 'showDeliveryLog'])->name('booking.delivery_log');
 Route::get('/booking/sms/search', [SmsIntergrationController::class, 'searchPatients'])->name('booking.searchPatients');

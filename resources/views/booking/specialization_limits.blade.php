@@ -74,6 +74,7 @@
                     </a>
                 </form>
                 <!-- Default Limit Form -->
+                @if(Auth::guard('booking')->check() && in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
                 <form method="POST" action="{{ route('booking.specialization.set.default.limit') }}" class="mt-3">
                     @csrf
                     <div class="d-flex align-items-end gap-3">
@@ -82,7 +83,7 @@
                                 <i class="fas fa-stethoscope me-1"></i>Select Specialization
                             </label>
                             <select name="specialization_id" id="specialization_id" class="form-control form-control-sm shadow-sm" required>
-                                <option value="">Select a specialization</option>
+                                <option value="">Select a specialization to set default limit.</option>
                                 @foreach($specializations as $specialization)
                                 <option value="{{ $specialization->id }}" data-default-limit="{{ $specialization->limits ?? ($default_limit ?? 10) }}">{{ $specialization->name }}</option>
                                 @endforeach
@@ -95,11 +96,14 @@
                             <input type="number" name="default_limit" id="default_limit" class="form-control form-control-sm shadow-sm"
                                 min="0" required>
                         </div>
+                        @if (in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
                         <button type="submit" class="btn btn-sm btn-primary shadow-sm">
                             <i class="fas fa-save me-1"></i>Save Default
                         </button>
+                        @endif
                     </div>
                 </form>
+                @endif
             </div>
 
             <!-- Table -->
@@ -159,10 +163,12 @@
                                     <input type="hidden" name="specialization_id" value="{{ $specialization->id }}">
                                     <input type="hidden" name="date" value="{{ $date->toDateString() }}">
                                     <input type="hidden" name="is_closed" value="{{ $dateLimit && $dateLimit->is_closed ? '0' : '1' }}">
+                                    @if (in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
                                     <button type="submit" class="btn btn-sm {{ $dateLimit && $dateLimit->is_closed ? 'btn-success' : 'btn-danger' }} shadow-sm">
                                         <i class="fas fa-door-{{ $dateLimit && $dateLimit->is_closed ? 'open' : 'closed' }} me-1"></i>
                                         {{ $dateLimit && $dateLimit->is_closed ? 'Reopen' : 'Close' }}
                                     </button>
+                                    @endif
                                 </form>
                             </td>
                         </tr>
@@ -211,7 +217,7 @@
                             <i class="fas fa-calendar-day me-1"></i>Days of Operation
                         </label>
                         <div class="d-flex flex-wrap gap-2">
-                            @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'daily'] as $day)
+                            @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'daily'] as $day)
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input day-checkbox" type="checkbox" name="days_of_week[]"
                                     id="day_{{ $day }}" value="{{ $day }}"
@@ -248,9 +254,11 @@
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-outline-secondary shadow-sm"
                         data-bs-dismiss="modal"><i class="fas fa-times me-1"></i>Close</button>
+                    @if (in_array(Auth::guard('booking')->user()->role, ['superadmin', 'admin']))
                     <button type="submit" class="btn btn-primary shadow-sm">
                         <i class="fas fa-save me-1"></i>Save
                     </button>
+                    @endif
                 </div>
             </form>
         </div>
@@ -259,7 +267,7 @@
 
 <!-- Suggested Dates Modal -->
 @if (session('modal_target') === 'suggestedDatesModal')
-    @include('booking.suggested_dates_modal')
+@include('booking.suggested_dates_modal')
 @endif
 <!-- Custom Styles -->
 <style>

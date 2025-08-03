@@ -1,12 +1,11 @@
-<!-- resources/views/booking/branch.blade.php -->
 @extends('layouts.dashboard')
 
 @section('title', $title)
 
 @section('content')
-    <div class="container-fluid px-0">
+    <div class="container-fluid px-0 px-md-4">
         <div class="widget shadow-sm mb-0 border-0 rounded-3">
-            <div class="card-header text-white d-flex justify-content-between align-items-center py-3 px-4 rounded-top"
+            <div class="card-header text-white d-flex justify-content-between align-items-center py-3 px-3 px-md-4 rounded-top"
                 style="background-color: #159ed5;">
                 <h4 class="mb-0 d-flex align-items-center">
                     <i class="fas fa-table me-2"></i>{{ $title }}
@@ -14,40 +13,41 @@
             </div>
 
             <div class="p-3 bg-light border-bottom">
-                <form id="filter-form" class="mb-0">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
+                <form id="filter-form" action="{{ route('booking.branch', $branch) }}" method="GET" class="mb-0">
+                    <div class="row g-2 g-md-3 align-items-end">
+                        <div class="col-12 col-md-3">
                             <label for="start_date" class="form-label small fw-semibold text-muted">
                                 <i class="fas fa-calendar-alt me-1"></i>Start Date
                             </label>
                             <input type="date" name="start_date" id="start_date"
-                                class="form-control form-control-sm shadow-sm" value="{{ request('start_date') }}">
+                                class="form-control form-control-sm shadow-sm" value="{{ $start_date }}">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-12 col-md-3">
                             <label for="end_date" class="form-label small fw-semibold text-muted">
                                 <i class="fas fa-calendar-alt me-1"></i>End Date
                             </label>
                             <input type="date" name="end_date" id="end_date" class="form-control form-control-sm shadow-sm"
-                                value="{{ request('end_date') }}">
+                                value="{{ $end_date }}">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-12 col-md-3">
                             <label for="search" class="form-label small fw-semibold text-muted">
                                 <i class="fas fa-search me-1"></i>Search
                             </label>
                             <input type="text" name="search" id="search" class="form-control form-control-sm shadow-sm"
-                                value="{{ request('search') }}" placeholder="Search by any detail">
+                                value="{{ $search }}" placeholder="Search by any detail">
                         </div>
-                        <div class="col-md-3 d-flex align-items-end gap-2">
-                            <button type="button" class="btn btn-primary btn-sm flex-grow-1 shadow-sm" id="apply-filters">
+                        <div class="col-12 col-md-3 d-flex align-items-end gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm flex-grow-1 shadow-sm" id="apply-filters">
                                 <i class="fas fa-filter me-1"></i>Apply Filter
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm" id="reset-filters">
+                            <a href="{{ route('booking.branch', $branch) }}" class="btn btn-sm btn-outline-secondary shadow-sm">
                                 <i class="fas fa-undo me-1"></i>Reset
-                            </button>
+                            </a>
                             <button type="button" class="btn btn-info btn-sm shadow-sm" onclick="printTable()">
                                 <i class="fas fa-print me-1"></i>Print
                             </button>
-                            <a href="{{ route('booking.branch', $branch) }}?export_csv=1" class="btn btn-secondary btn-sm shadow-sm" id="export-csv-btn">
+                            <a href="{{ route('booking.branch', $branch) }}?export_csv=1&start_date={{ $start_date }}&end_date={{ $end_date }}&search={{ urlencode($search) }}"
+                                class="btn btn-secondary btn-sm shadow-sm" id="export-csv-btn">
                                 <i class="fas fa-file-csv me-1"></i>CSV
                             </a>
                         </div>
@@ -79,29 +79,31 @@
                         No appointments found for {{ $title }}.
                     </div>
                 @else
-                    <table class="table table-bordered table-sm" id="appointmentsTable" width="100%" cellspacing="0">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" class="select-all"></th>
-                                <th>S.No</th>
-                                <th>Pt Name</th>
-                                <th>Pt No.</th>
-                                <th>Phone</th>
-                                <th>Email</th>
-                                <th>Date</th>
-                                <th>Time</th>
-                                <th>Doctor</th>
-                                <th>Specialization</th>
-                                <th>Booking Type</th>
-                                <th>Status</th>
-                                <th>Hospital Branch</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- DataTable will populate this -->
-                        </tbody>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm" id="appointmentsTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th class="text-center"><input type="checkbox" class="select-all"></th>
+                                    <th>S.No</th>
+                                    <th>Pt Name</th>
+                                    <th>Pt No.</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Doctor</th>
+                                    <th>Specialization</th>
+                                    <th>Booking Type</th>
+                                    <th>Status</th>
+                                    <th>Hospital Branch</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- DataTable will populate this -->
+                            </tbody>
+                        </table>
+                    </div>
                 @endif
             </div>
 
@@ -170,16 +172,84 @@
             background-color: #f8f9fa;
             color: #0d6efd;
         }
+
+        @media (max-width: 767.98px) {
+            .container-fluid {
+                padding: 0 0.5rem !important;
+            }
+
+            .widget {
+                margin: 0 0.5rem;
+            }
+
+            .card-header {
+                font-size: 1.1rem;
+                padding: 0.75rem 1rem;
+            }
+
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .table {
+                font-size: 0.85rem;
+            }
+
+            .table th, .table td {
+                padding: 0.5rem 0.3rem;
+                white-space: nowrap;
+            }
+
+            .table th:nth-child(1),
+            .table td:nth-child(1),
+            .table th:nth-child(2),
+            .table td:nth-child(2),
+            .table th:nth-child(3),
+            .table td:nth-child(3),
+            .table th:last-child,
+            .table td:last-child {
+                min-width: 60px;
+            }
+
+            .btn-sm {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.8rem;
+            }
+
+            .form-control-sm {
+                font-size: 0.8rem;
+                padding: 0.25rem 0.5rem;
+            }
+
+            .action-dropdown {
+                margin: 0.5rem 0;
+            }
+
+            .dataTables_length,
+            .dataTables_info {
+                font-size: 0.8rem;
+                margin: 0.5rem;
+            }
+
+            .dataTables_paginate {
+                margin: 0.5rem;
+            }
+
+            .dataTables_paginate .paginate_button {
+                padding: 0.2rem 0.5rem !important;
+                font-size: 0.8rem;
+            }
+        }
     </style>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 
-   <script>
+    <script>
     $(document).ready(function () {
         console.log('Document ready, initializing scripts for branch: {{ $branch }}');
 
@@ -248,7 +318,7 @@
             lengthMenu: [[50, 100, 200, -1], ["50", "100", "200", "All"]],
             responsive: true,
             ordering: true,
-            searching: true,
+            searching: false, // Disable client-side searching
             order: [[6, 'desc']],
             language: {
                 emptyTable: 'No appointments found for this branch.'
@@ -272,100 +342,6 @@
             ], true);
             return date.isValid() ? date.format('YYYY-MM-DD') : null;
         }
-
-        const debouncedApplyFilters = _.debounce(applyFilters, 300);
-
-        function applyFilters() {
-            const startDateInput = $('#start_date').val();
-            const endDateInput = $('#end_date').val();
-            const searchTerm = $('#search').val().toLowerCase();
-
-            const startDate = startDateInput ? normalizeDate(startDateInput) : null;
-            const endDate = endDateInput ? normalizeDate(endDateInput) : null;
-
-            if (startDateInput && !startDate) {
-                alert('Invalid start date format.');
-                return;
-            }
-            if (endDateInput && !endDate) {
-                alert('Invalid end date format.');
-                return;
-            }
-
-            $.fn.dataTable.ext.search.pop();
-            $.fn.dataTable.ext.search.push((settings, data, dataIndex) => {
-                const row = table.row(dataIndex).data();
-                let appointmentDate = normalizeDate(row.appointment_date);
-
-                let dateMatch = true;
-                if (appointmentDate) {
-                    if (startDate && !endDate) {
-                        dateMatch = appointmentDate === startDate;
-                    } else if (startDate && endDate) {
-                        dateMatch = appointmentDate >= startDate && appointmentDate <= endDate;
-                    } else if (startDate) {
-                        dateMatch = appointmentDate >= startDate;
-                    } else if (endDate) {
-                        dateMatch = appointmentDate <= endDate;
-                    }
-                } else {
-                    dateMatch = !startDate && !endDate;
-                }
-
-                let searchMatch = true;
-                if (searchTerm) {
-                    const searchableFields = [
-                        row.appointment_number,
-                        row.full_name,
-                        row.patient_number,
-                        row.email,
-                        row.phone,
-                        row.appointment_date,
-                        row.appointment_time,
-                        row.specialization,
-                        row.doctor,
-                        row.hospital_branch,
-                        row.booking_type,
-                        row.appointment_status,
-                        row.notes,
-                        row.doctor_comments
-                    ].map(val => (val || '').toString().toLowerCase());
-
-                    searchMatch = searchableFields.some(field => field.includes(searchTerm));
-                }
-
-                return dateMatch && searchMatch;
-            });
-
-            table.draw();
-        }
-
-        $('#apply-filters').on('click', () => {
-            $('#apply-filters').html('<i class="fas fa-spinner fa-spin me-1"></i>Applying...');
-            debouncedApplyFilters();
-            setTimeout(() => {
-                $('#apply-filters').html('<i class="fas fa-filter me-1"></i>Apply Filter');
-            }, 500);
-        });
-
-        $('#start_date, #end_date, #search').on('keypress', function (e) {
-            if (e.which === 13) {
-                e.preventDefault();
-                $('#apply-filters').html('<i class="fas fa-spinner fa-spin me-1"></i>Applying...');
-                debouncedApplyFilters();
-                setTimeout(() => {
-                    $('#apply-filters').html('<i class="fas fa-filter me-1"></i>Apply Filter');
-                }, 500);
-            }
-        });
-
-        $('#reset-filters').on('click', () => {
-            $('#filter-form')[0].reset();
-            $.fn.dataTable.ext.search.pop();
-            table.search('').draw();
-        });
-
-        $('#search').on('keyup', debouncedApplyFilters);
 
         $('#appointmentsTable').on('click', '.row-checkbox', function () {
             $(this).closest('tr').toggleClass('selected');
@@ -434,11 +410,6 @@
             const ids = selectedRows.map((i, el) => $(el).val()).get();
             updateAppointments('missed', ids);
             $('#actionDropdownMenu').removeClass('show');
-        });
-
-        $('#export-csv-btn').on('click', function (e) {
-            e.preventDefault();
-            window.location.href = '{{ route("booking.branch", $branch) }}?export_csv=1';
         });
 
         window.printTable = function () {
@@ -562,5 +533,5 @@
             }
         });
     });
-</script>
+    </script>
 @endsection

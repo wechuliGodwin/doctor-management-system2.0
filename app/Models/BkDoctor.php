@@ -11,7 +11,6 @@ class BkDoctor extends Model
 
     protected $table = 'bk_doctor';
 
-    // Fields that can be mass-assigned
     protected $fillable = [
         'group_id',
         'doctor_name',
@@ -21,6 +20,5 @@ class BkDoctor extends Model
         'department'
     ];
 
-    // Disable timestamps if your table doesn't have created_at / updated_at
     public $timestamps = false;
 }

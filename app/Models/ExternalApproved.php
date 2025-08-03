@@ -33,7 +33,7 @@ class ExternalApproved extends Model
     // Ensure created_at is treated as a timestamp
     protected $dates = ['created_at', 'updated_at', 'appointment_date'];
     protected $attributes = [
-        'appointment_status' => 'pending', // Default value
+        'appointment_status' => 'pending',
     ];
     public function pendingApproval()
     {

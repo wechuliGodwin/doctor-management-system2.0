@@ -81,5 +81,6 @@ class Kernel extends HttpKernel
         'superadmin' => \App\Http\Middleware\SuperadminMiddleware::class,
         'adminOrSuperadmin' => \App\Http\Middleware\AdminOrSuperadminMiddleware::class,
         'check.branch.write' => \App\Http\Middleware\CheckBranchWritePermission::class,
+        'ensure.valid.branch' => \App\Http\Middleware\EnsureValidBranch::class,
     ];
 }

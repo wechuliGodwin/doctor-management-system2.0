@@ -21,23 +21,19 @@ class AppServiceProvider extends ServiceProvider
     {
         //
     }
-
-    /**
-     * Bootstrap any application services.
-     */
     public function boot()
     {
-        // View::composer('*', function ($view) {
-        //     if (Auth::guard('booking')->check()) {
-        //         $userBranch = Auth::guard('booking')->user()->hospital_branch;
-        //         $alertsCount = BkMessaging::where('active', 1)
-        //             ->where('hospital_branch', $userBranch)
-        //             ->count();
+        View::composer('*', function ($view) {
+            if (Auth::guard('booking')->check()) {
+                $userBranch = Auth::guard('booking')->user()->hospital_branch;
+                $alertsCount = BkMessaging::where('active', 1)
+                    ->where('hospital_branch', $userBranch)
+                    ->count();
 
-        //         $view->with('alertsCount', $alertsCount);
-        //     }
-        // });
+                $view->with('alertsCount', $alertsCount);
+            }
+        });
 
-        // View::composer(['layouts.dashboard', 'layouts.sidebar'], ReminderCountComposer::class);
+        View::composer(['layouts.dashboard', 'layouts.sidebar'], ReminderCountComposer::class);
     }
 }

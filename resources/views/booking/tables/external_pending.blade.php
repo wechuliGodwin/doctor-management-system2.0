@@ -341,11 +341,6 @@
 @empty
 @endforelse
 
-<!-- Suggested Dates Modal (only include if needed) -->
-@if (session('modal_target') === 'suggestedDatesModal')
-    @include('booking.suggested_dates_modal')
-@endif
-
 @push('scripts')
     <!-- Minimal JavaScript for DataTable (if needed) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>

@@ -1,3 +1,4 @@
+```blade
 @extends('layouts.dashboard')
 
 @section('content')
@@ -122,7 +123,7 @@
                                                     name="switchable_branches[]"
                                                     id="branch_{{ $branch }}"
                                                     value="{{ $branch }}"
-                                                    {{ in_array($branch, old('switchable_branches', $user->switchable_branches ?? [])) ? 'checked' : '' }}
+                                                    {{ in_array($branch, old('switchable_branches', $user->switchable_branches ?? [$user->hospital_branch])) ? 'checked' : '' }}
                                                     {{ $branch === $user->hospital_branch ? 'checked disabled' : '' }}>
                                                 <label class="form-check-label" for="branch_{{ $branch }}">
                                                     {{ ucfirst($branch) }}
@@ -141,7 +142,7 @@
                                         <label class="form-label fw-medium">Branch Permissions</label>
                                         <div id="branch-permissions">
                                             @foreach($hospital_branches as $branch)
-                                            <div class="branch-permission mb-2 {{ in_array($branch, old('switchable_branches', $user->switchable_branches ?? [])) ? '' : 'd-none' }}"
+                                            <div class="branch-permission mb-2 {{ in_array($branch, old('switchable_branches', $user->switchable_branches ?? [$user->hospital_branch])) ? '' : 'd-none' }}"
                                                 data-branch="{{ $branch }}">
                                                 <label class="fw-medium">{{ ucfirst($branch) }} Permissions</label>
                                                 <div class="form-check">
@@ -314,6 +315,10 @@
     .form-check-label {
         cursor: pointer;
     }
+
+    .branch-permission.d-none {
+        display: none;
+    }
 </style>
 @endpush
 
@@ -325,10 +330,33 @@
         function updateSwitchableBranches() {
             const hospitalBranch = $('#hospital_branch').val();
             // Uncheck and enable all checkboxes
-            $('input[name="switchable_branches[]"]').prop('disabled', false);
+            $('.switchable-branch').prop('disabled', false);
             // Check and disable the primary hospital_branch
             $(`#branch_${hospitalBranch}`).prop('checked', true).prop('disabled', true);
+            // Show/hide branch permission sections based on selected branches
+            $('.switchable-branch').each(function() {
+                const branch = $(this).val();
+                const permissionSection = $(`.branch-permission[data-branch="${branch}"]`);
+                if ($(this).is(':checked')) {
+                    permissionSection.removeClass('d-none');
+                } else {
+                    permissionSection.addClass('d-none');
+                }
+            });
         }
+
+        // Update branch permissions visibility when switchable branches change
+        $('.switchable-branch').on('change', function() {
+            const branch = $(this).val();
+            const permissionSection = $(`.branch-permission[data-branch="${branch}"]`);
+            if ($(this).is(':checked')) {
+                permissionSection.removeClass('d-none');
+            } else {
+                permissionSection.addClass('d-none');
+                // Reset permissions to avoid sending unchecked branch permissions
+                permissionSection.find('input[type="radio"]').prop('checked', false);
+            }
+        });
 
         // Run on page load
         updateSwitchableBranches();
@@ -349,3 +377,4 @@
     }
 </script>
 @endpush
+```

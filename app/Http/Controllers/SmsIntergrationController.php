@@ -382,7 +382,7 @@ class SmsIntergrationController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:default,urgent,followup',
-            'content' => 'required|string|max:160',
+            'content' => 'required|string|max:3000',
             'id' => 'nullable|exists:bk_notification_templates,id'
         ]);
 

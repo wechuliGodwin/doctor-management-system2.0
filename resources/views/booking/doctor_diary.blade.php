@@ -1,4 +1,3 @@
-```html
 @extends('layouts.dashboard')
 @section('title', 'Doctor\'s Appointment Diary')
 
@@ -49,7 +48,7 @@
                             <option value="">All Doctors</option>
                             @foreach($doctors as $doctor)
                             <option value="{{ $doctor->id }}">
-                                {{ $doctor->doctor_name }} ({{ $doctor->department ?? 'General' }})
+                                {{ \Illuminate\Support\Str::limit($doctor->doctor_name, 20) }} ({{ $doctor->department ?? 'General' }})
                             </option>
                             @endforeach
                         </select>
@@ -74,13 +73,13 @@
 
     <div class="calendar-container">
         <div id="monthlyCalendar" class="calendar-grid">
-            <div class="day-header">Sunday</div>
-            <div class="day-header">Monday</div>
-            <div class="day-header">Tuesday</div>
-            <div class="day-header">Wednesday</div>
-            <div class="day-header">Thursday</div>
-            <div class="day-header">Friday</div>
-            <div class="day-header">Saturday</div>
+            <div class="day-header">Sun</div>
+            <div class="day-header">Mon</div>
+            <div class="day-header">Tue</div>
+            <div class="day-header">Wed</div>
+            <div class="day-header">Thu</div>
+            <div class="day-header">Fri</div>
+            <div class="day-header">Sat</div>
             <!-- Calendar days will be populated by JavaScript -->
         </div>
     </div>
@@ -110,7 +109,7 @@
     .container {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 2rem;
+        padding: 1.5rem;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
         min-height: 100vh;
@@ -118,13 +117,13 @@
 
     /* Controls Section */
     .controls-section {
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
 
     .controls-card {
         background: white;
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 1.25rem;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
         border: 1px solid rgba(21, 158, 213, 0.1);
     }
@@ -132,31 +131,31 @@
     .controls-grid {
         display: grid;
         grid-template-columns: auto 1fr;
-        gap: 2rem;
+        gap: 1.5rem;
         align-items: end;
     }
 
     .control-group {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
     .navigation-controls {
-        min-width: 300px;
+        min-width: 280px;
     }
 
     .filter-controls {
         display: flex;
         flex-direction: row;
-        gap: 1.5rem;
+        gap: 1.25rem;
         align-items: flex-end;
     }
 
     .control-label {
         font-weight: 600;
         color: #2c3e50;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 0.3rem;
@@ -183,15 +182,16 @@
         background: #159ed5;
         border: none;
         color: white;
-        width: 40px;
-        height: 40px;
+        width: 44px;
+        height: 44px;
         border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s ease;
-        font-size: 1rem;
+        font-size: 1.1rem;
+        touch-action: manipulation;
     }
 
     .nav-btn:hover {
@@ -213,17 +213,17 @@
     .current-month {
         flex: 1;
         text-align: center;
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         font-weight: 700;
         color: #159ed5;
-        padding: 0 1rem;
+        padding: 0 0.75rem;
     }
 
     /* Form Controls */
     .form-group {
         display: flex;
         flex-direction: column;
-        min-width: 250px;
+        min-width: 220px;
     }
 
     .form-select {
@@ -235,6 +235,9 @@
         color: #495057;
         transition: all 0.2s ease;
         cursor: pointer;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
     }
 
     .form-select:focus {
@@ -252,7 +255,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 4rem 2rem;
+        padding: 3rem 1.5rem;
         background: white;
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
@@ -263,36 +266,31 @@
     }
 
     .spinner {
-        width: 48px;
-        height: 48px;
+        width: 40px;
+        height: 40px;
         border: 4px solid #f3f3f3;
         border-top: 4px solid #159ed5;
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin: 0 auto 1rem;
+        margin: 0 auto 0.75rem;
     }
 
     .loading-text {
         color: #6c757d;
-        font-size: 1.1rem;
+        font-size: 1rem;
         margin: 0;
     }
 
     @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
 
     /* Calendar Container */
     .calendar-container {
         background: white;
         border-radius: 12px;
-        overflow: hidden;
+        overflow-x: auto;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
         border: 1px solid rgba(21, 158, 213, 0.1);
     }
@@ -301,28 +299,30 @@
     .calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
+        min-width: 600px; /* Ensures grid doesn't collapse on small screens */
     }
 
     .day-header {
         background: linear-gradient(135deg, #159ed5 0%, #1e88e5 100%);
         color: white;
         font-weight: 600;
-        padding: 1rem 0.5rem;
+        padding: 0.75rem 0.5rem;
         text-align: center;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
 
     .day-cell {
-        min-height: 100px;
-        padding: 0.75rem;
+        min-height: 90px;
+        padding: 0.5rem;
         border-bottom: 1px solid #e9ecef;
         border-right: 1px solid #e9ecef;
         position: relative;
         cursor: pointer;
         transition: all 0.2s ease;
         background: white;
+        touch-action: manipulation;
     }
 
     .day-cell:hover {
@@ -357,24 +357,24 @@
     }
 
     .date-number {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
         color: #2c3e50;
         position: absolute;
-        top: 0.5rem;
-        right: 0.75rem;
+        top: 0.4rem;
+        right: 0.6rem;
         line-height: 1.2;
     }
 
     .appointment-count {
         position: absolute;
-        bottom: 0.5rem;
-        left: 0.75rem;
+        bottom: 0.4rem;
+        left: 0.6rem;
         background: #159ed5;
         color: white;
-        padding: 0.2rem 0.5rem;
+        padding: 0.25rem 0.5rem;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 600;
         box-shadow: 0 2px 8px rgba(21, 158, 213, 0.3);
     }
@@ -398,7 +398,7 @@
 
     .schedule-header {
         background: linear-gradient(135deg, #159ed5 0%, #1e88e5 100%);
-        padding: 1.5rem 2rem;
+        padding: 1.25rem 1.5rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -409,15 +409,16 @@
         background: rgba(255, 255, 255, 0.2);
         border: 1px solid rgba(255, 255, 255, 0.3);
         color: white;
-        padding: 0.75rem 1.5rem;
+        padding: 0.75rem 1.25rem;
         border-radius: 8px;
         cursor: pointer;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         font-weight: 500;
         transition: all 0.2s ease;
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        touch-action: manipulation;
     }
 
     .back-btn:hover {
@@ -427,12 +428,12 @@
 
     .schedule-title {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         font-weight: 600;
     }
 
     .schedule-content {
-        padding: 2rem;
+        padding: 1.5rem;
     }
 
     /* Doctor Cards */
@@ -440,7 +441,7 @@
         background: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 12px;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.25rem;
         overflow: hidden;
         transition: all 0.2s ease;
     }
@@ -451,7 +452,7 @@
     }
 
     .doctor-card-summary {
-        padding: 1.5rem;
+        padding: 1.25rem;
         cursor: pointer;
         display: flex;
         justify-content: space-between;
@@ -465,19 +466,19 @@
     }
 
     .doctor-card-summary span:first-child {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
         color: #2c3e50;
     }
 
     .toggle-icon {
         color: #159ed5;
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         transition: transform 0.2s ease;
     }
 
     .doctor-appointments {
-        padding: 1.5rem;
+        padding: 1.25rem;
         background: white;
         display: none;
     }
@@ -489,11 +490,11 @@
     }
 
     .doctor-appointments li {
-        padding: 1rem 0;
+        padding: 0.75rem 0;
         border-bottom: 1px solid #f1f3f4;
         display: flex;
         align-items: center;
-        gap: 1rem;
+        gap: 0.75rem;
     }
 
     .doctor-appointments li:last-child {
@@ -503,20 +504,23 @@
     .appointment-time {
         font-weight: 700;
         color: #159ed5;
-        min-width: 100px;
-        font-size: 0.95rem;
+        min-width: 90px;
+        font-size: 0.9rem;
     }
 
     .appointment-details {
         flex: 1;
         color: #495057;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .appointment-status {
         padding: 0.25rem 0.75rem;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
@@ -538,10 +542,10 @@
     }
 
     .reminder-status {
-        padding: 0.75rem 1.5rem;
+        padding: 0.75rem 1.25rem;
         background: #e3f2fd;
         color: #1565c0;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         font-weight: 500;
     }
 
@@ -550,12 +554,13 @@
         background: #f8d7da;
         border: 1px solid #f5c6cb;
         color: #721c24;
-        padding: 1rem 1.5rem;
+        padding: 1rem 1.25rem;
         border-radius: 8px;
         margin-top: 1rem;
         display: flex;
         align-items: center;
         gap: 0.75rem;
+        font-size: 0.9rem;
     }
 
     .error-text {
@@ -567,14 +572,14 @@
         background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
         border: 1px solid #159ed5;
         color: #1565c0;
-        padding: 2rem;
+        padding: 1.5rem;
         border-radius: 12px;
         text-align: center;
     }
 
     .alert-info h4 {
         color: #159ed5;
-        font-size: 1.25rem;
+        font-size: 1.1rem;
         font-weight: 600;
         margin-bottom: 0.5rem;
     }
@@ -583,15 +588,19 @@
     @media (max-width: 1024px) {
         .controls-grid {
             grid-template-columns: 1fr;
-            gap: 1.5rem;
+            gap: 1.25rem;
         }
 
         .filter-controls {
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
         }
 
         .navigation-controls {
+            min-width: auto;
+        }
+
+        .form-group {
             min-width: auto;
         }
     }
@@ -605,57 +614,300 @@
             padding: 1rem;
         }
 
-        .form-group {
-            min-width: auto;
+        .month-nav {
+            padding: 0.4rem;
+        }
+
+        .nav-btn {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+
+        .current-month {
+            font-size: 1.1rem;
+            padding: 0 0.5rem;
+        }
+
+        .form-select {
+            padding: 0.65rem 0.9rem;
+            font-size: 0.9rem;
+        }
+
+        .apply-filter-btn {
+            padding: 0.65rem 1.25rem;
+            font-size: 0.9rem;
+        }
+
+        .calendar-grid {
+            grid-template-columns: repeat(7, 1fr);
+            min-width: 500px;
+        }
+
+        .day-header {
+            font-size: 0.7rem;
+            padding: 0.5rem 0.25rem;
         }
 
         .day-cell {
-            min-height: 80px;
-            padding: 0.5rem;
+            min-height: 70px;
+            padding: 0.4rem;
         }
 
         .date-number {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
+            top: 0.3rem;
+            right: 0.5rem;
         }
 
         .appointment-count {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             padding: 0.2rem 0.4rem;
+            bottom: 0.3rem;
+            left: 0.5rem;
         }
 
         .schedule-header {
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
             text-align: center;
+            padding: 1rem;
+        }
+
+        .schedule-title {
+            font-size: 1.25rem;
+        }
+
+        .back-btn {
+            padding: 0.65rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .schedule-content {
+            padding: 1rem;
+        }
+
+        .doctor-card {
+            margin-bottom: 1rem;
+        }
+
+        .doctor-card-summary {
+            padding: 1rem;
+        }
+
+        .doctor-card-summary span:first-child {
+            font-size: 0.95rem;
+        }
+
+        .doctor-appointments {
+            padding: 1rem;
         }
 
         .doctor-appointments li {
             flex-direction: column;
             align-items: flex-start;
             gap: 0.5rem;
+            padding: 0.5rem 0;
         }
 
         .appointment-time {
             min-width: auto;
+            font-size: 0.85rem;
+        }
+
+        .appointment-details {
+            font-size: 0.85rem;
+        }
+
+        .appointment-status {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.6rem;
+        }
+
+        .loading-container {
+            padding: 2rem 1rem;
+        }
+
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border-width: 3px;
+        }
+
+        .loading-text {
+            font-size: 0.9rem;
+        }
+
+        .error-alert {
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .alert-info {
+            padding: 1rem;
+        }
+
+        .alert-info h4 {
+            font-size: 1rem;
         }
     }
 
     @media (max-width: 480px) {
+        .container {
+            padding: 0.75rem;
+        }
+
+        .controls-card {
+            padding: 0.75rem;
+        }
+
+        .controls-grid {
+            gap: 1rem;
+        }
+
+        .month-nav {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .nav-btn {
+            width: 100%;
+            max-width: 200px;
+            height: 38px;
+            font-size: 0.95rem;
+        }
+
+        .current-month {
+            font-size: 1rem;
+            padding: 0.5rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        .form-group {
+            width: 100%;
+        }
+
+        .form-select {
+            padding: 0.6rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .apply-filter-btn {
+            width: 100%;
+            padding: 0.6rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .calendar-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
+
+        .calendar-grid {
+            grid-template-columns: repeat(7, 1fr);
+            min-width: 420px; /* Adjusted for smaller screens */
+            gap: 0.5px;
+        }
+
+        .day-header {
+            font-size: 0.65rem;
+            padding: 0.4rem 0.2rem;
+        }
+
         .day-cell {
-            min-height: 60px;
-            padding: 0.25rem;
+            min-height: 50px;
+            padding: 0.3rem;
         }
 
         .date-number {
-            font-size: 0.85rem;
-            top: 0.25rem;
-            right: 0.5rem;
+            font-size: 0.75rem;
+            top: 0.2rem;
+            right: 0.4rem;
         }
 
         .appointment-count {
-            bottom: 0.25rem;
-            left: 0.5rem;
             font-size: 0.6rem;
+            padding: 0.15rem 0.35rem;
+            bottom: 0.2rem;
+            left: 0.4rem;
+        }
+
+        .schedule-header {
+            padding: 0.75rem;
+        }
+
+        .schedule-title {
+            font-size: 1.1rem;
+        }
+
+        .back-btn {
+            padding: 0.6rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .doctor-card {
+            margin-bottom: 0.75rem;
+        }
+
+        .doctor-card-summary {
+            padding: 0.75rem;
+        }
+
+        .doctor-card-summary span:first-child {
+            font-size: 0.9rem;
+        }
+
+        .toggle-icon {
+            font-size: 1rem;
+        }
+
+        .doctor-appointments {
+            padding: 0.75rem;
+        }
+
+        .doctor-appointments li {
+            padding: 0.4rem 0;
+        }
+
+        .appointment-time {
+            font-size: 0.8rem;
+        }
+
+        .appointment-details {
+            font-size: 0.8rem;
+        }
+
+        .appointment-status {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.5rem;
+        }
+
+        .loading-container {
+            padding: 1.5rem 0.75rem;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border-width: 3px;
+        }
+
+        .loading-text {
+            font-size: 0.85rem;
+        }
+
+        .error-alert {
+            padding: 0.6rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .alert-info {
+            padding: 0.75rem;
+        }
+
+        .alert-info h4 {
+            font-size: 0.95rem;
         }
     }
 </style>
@@ -692,7 +944,8 @@
         $(doctorFilter).select2({
             placeholder: "Select a Doctor",
             allowClear: true,
-            theme: 'default'
+            theme: 'default',
+            dropdownCssClass: 'select2-mobile'
         });
 
         // Custom Select2 styling
@@ -726,8 +979,23 @@
             });
         });
 
+        // Add touch delay to prevent accidental taps
+        let touchTimeout;
+        function handleTouchEvent(event, callback) {
+            if (event.type === 'touchstart') {
+                touchTimeout = setTimeout(() => {
+                    callback(event);
+                }, 100);
+            } else if (event.type === 'touchend' || event.type === 'touchcancel') {
+                clearTimeout(touchTimeout);
+            } else {
+                callback(event);
+            }
+        }
+
         // Initialize calendar with retry mechanism
-        function initializeWithRetry(retries = 3, delay = 1000) {
+        function initializeWithRetry(retries = 3, delay = 0) {
+            console.log('Initializing with retry, attempts left:', retries);
             updateDoctorDropdown().then(() => {
                 console.log('Doctor dropdown populated, loading calendar data');
                 loadCalendarData();
@@ -738,7 +1006,6 @@
                     setTimeout(() => initializeWithRetry(retries - 1, delay), delay);
                 } else {
                     console.error('All retries failed, using static doctor data');
-                    // Use static doctors from Blade template
                     if ($(doctorFilter).find('option').length <= 1) {
                         $(doctorFilter).append('<option value="" disabled>No doctors available</option>');
                     }
@@ -750,41 +1017,37 @@
 
         initializeWithRetry();
 
-        // Event listeners
-        prevMonthBtn.addEventListener('click', () => {
+        // Event listeners with touch handling
+        prevMonthBtn.addEventListener('click', (e) => handleTouchEvent(e, () => {
             currentMonth = moment(currentMonth).subtract(1, 'month').format('YYYY-MM');
             updateMonthDisplay();
             loadCalendarData();
-        });
+        }));
 
-        nextMonthBtn.addEventListener('click', () => {
+        nextMonthBtn.addEventListener('click', (e) => handleTouchEvent(e, () => {
             currentMonth = moment(currentMonth).add(1, 'month').format('YYYY-MM');
             updateMonthDisplay();
             loadCalendarData();
-        });
+        }));
 
         if (branchFilter) {
-            branchFilter.addEventListener('change', (e) => {
+            branchFilter.addEventListener('change', (e) => handleTouchEvent(e, () => {
                 currentBranch = e.target.value ? e.target.value.trim().toLowerCase() : '';
                 currentDoctorId = '';
-                console.log('Branch changed', {
-                    currentBranch
-                });
+                console.log('Branch changed', { currentBranch });
                 updateDoctorDropdown();
-            });
+            }));
         }
 
-        applyFilterBtn.addEventListener('click', () => {
+        applyFilterBtn.addEventListener('click', (e) => handleTouchEvent(e, () => {
             currentDoctorId = doctorFilter.value;
-            console.log('Applying filter', {
-                currentDoctorId
-            });
+            console.log('Applying filter', { currentDoctorId });
             loadCalendarData();
-        });
+        }));
 
-        backToMonthlyBtn.addEventListener('click', () => {
+        backToMonthlyBtn.addEventListener('click', (e) => handleTouchEvent(e, () => {
             showMonthlyCalendar();
-        });
+        }));
 
         function updateMonthDisplay() {
             currentMonthDisplay.textContent = moment(currentMonth).format('MMMM YYYY');
@@ -810,7 +1073,6 @@
             hideLoading();
         }
 
-        // Rest of the JavaScript remains unchanged
         function updateDoctorDropdown() {
             return new Promise((resolve, reject) => {
                 console.log('Fetching doctors for branch:', currentBranch);
@@ -822,51 +1084,52 @@
                 });
 
                 fetch(`{{ route('booking.doctor.diary') }}?${params}`, {
-                        method: 'GET',
-                        headers: {
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                        }
-                    })
-                    .then(response => {
-                        console.log('Doctor fetch response status:', response.status);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log('Doctor fetch response:', data);
-                        if (data.success === false) {
-                            throw new Error(data.error || 'Failed to fetch doctors');
-                        }
-                        if (!data.doctors) {
-                            console.warn('No doctors key in response:', data);
-                            throw new Error('No doctors data returned from server');
-                        }
-                        const doctors = data.doctors || [];
-                        $(doctorFilter).empty().append('<option value="">All Doctors</option>');
-                        if (doctors.length === 0) {
-                            console.warn('No doctors returned for branch:', currentBranch);
-                            $(doctorFilter).append('<option value="" disabled>No doctors available</option>');
-                        } else {
-                            doctors.forEach(doctor => {
-                                $(doctorFilter).append(
-                                    `<option value="${doctor.id}">${doctor.doctor_name} (${doctor.department || 'General'})</option>`
-                                );
-                            });
-                        }
-                        $(doctorFilter).val(currentDoctorId).trigger('change.select2');
-                        hideLoading();
-                        resolve();
-                    })
-                    .catch(error => {
-                        console.error('Error fetching doctors:', error);
-                        showError('Failed to load doctors: ' + error.message);
-                        reject(error);
-                    });
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    }
+                })
+                .then(response => {
+                    console.log('Doctor fetch response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Doctor fetch response:', data);
+                    if (data.success === false) {
+                        throw new Error(data.error || 'Failed to fetch doctors');
+                    }
+                    if (!data.doctors) {
+                        console.warn('No doctors key in response:', data);
+                        throw new Error('No doctors data returned from server');
+                    }
+                    const doctors = data.doctors || [];
+                    $(doctorFilter).empty().append('<option value="">All Doctors</option>');
+                    if (doctors.length === 0) {
+                        console.warn('No doctors returned for branch:', currentBranch);
+                        $(doctorFilter).append('<option value="" disabled>No doctors available</option>');
+                    } else {
+                        doctors.forEach(doctor => {
+                            const doctorName = doctor.doctor_name.length > 20 ? doctor.doctor_name.substring(0, 17) + '...' : doctor.doctor_name;
+                            $(doctorFilter).append(
+                                `<option value="${doctor.id}">${doctorName} (${doctor.department || 'General'})</option>`
+                            );
+                        });
+                    }
+                    $(doctorFilter).val(currentDoctorId).trigger('change.select2');
+                    hideLoading();
+                    resolve();
+                })
+                .catch(error => {
+                    console.error('Error fetching doctors:', error);
+                    showError('Failed to load doctors: ' + error.message);
+                    reject(error);
+                });
             });
         }
 
@@ -889,9 +1152,7 @@
                 } else {
                     const doctorName = $(doctorFilter).find('option:selected').text().split(' (')[0];
                     params.append('doctor_name', doctorName);
-                    console.log('Using doctor_name for filtering', {
-                        doctorName
-                    });
+                    console.log('Using doctor_name for filtering', { doctorName });
                 }
             }
 
@@ -900,34 +1161,35 @@
             }
 
             fetch(`{{ route('booking.doctor.diary') }}?${params}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    }
-                })
-                .then(response => {
-                    console.log('Calendar fetch response status:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Calendar fetch response:', data);
-                    if (data.success === false) {
-                        throw new Error(data.error || 'Server returned error');
-                    }
-                    calendarData = data.calendar_data || {};
-                    renderCalendar();
-                    hideLoading();
-                })
-                .catch(error => {
-                    console.error('Error loading calendar data:', error);
-                    showError('Failed to load calendar data: ' + error.message);
-                });
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            })
+            .then(response => {
+                console.log('Calendar fetch response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Calendar fetch response:', data);
+                if (data.success === false) {
+                    throw new Error(data.error || 'Server returned error');
+                }
+                calendarData = data.calendar_data || {};
+                console.log('Calendar data loaded:', calendarData);
+                renderCalendar();
+                hideLoading();
+            })
+            .catch(error => {
+                console.error('Error loading calendar data:', error);
+                showError('Failed to load calendar data: ' + error.message);
+            });
         }
 
         function loadDailySchedule(date) {
@@ -949,9 +1211,7 @@
                 } else {
                     const doctorName = $(doctorFilter).find('option:selected').text().split(' (')[0];
                     params.append('doctor_name', doctorName);
-                    console.log('Using doctor_name for daily schedule', {
-                        doctorName
-                    });
+                    console.log('Using doctor_name for daily schedule', { doctorName });
                 }
             }
 
@@ -960,34 +1220,34 @@
             }
 
             fetch(`{{ route('booking.doctor.diary') }}?${params}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    }
-                })
-                .then(response => {
-                    console.log('Daily schedule fetch response status:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Daily schedule fetch response:', data);
-                    if (data.success === false) {
-                        throw new Error(data.error || 'Server returned error');
-                    }
-                    renderDailySchedule(data);
-                    showDailySchedule(date);
-                    hideLoading();
-                })
-                .catch(error => {
-                    console.error('Error loading daily schedule:', error);
-                    showError('Failed to load daily schedule: ' + error.message);
-                });
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                }
+            })
+            .then(response => {
+                console.log('Daily schedule fetch response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Daily schedule fetch response:', data);
+                if (data.success === false) {
+                    throw new Error(data.error || 'Server returned error');
+                }
+                renderDailySchedule(data);
+                showDailySchedule(date);
+                hideLoading();
+            })
+            .catch(error => {
+                console.error('Error loading daily schedule:', error);
+                showError('Failed to load daily schedule: ' + error.message);
+            });
         }
 
         function renderCalendar() {
@@ -1002,6 +1262,7 @@
 
             const today = moment().format('YYYY-MM-DD');
             let current = startOfCalendar.clone();
+            let cellCount = 0;
 
             while (current.isSameOrBefore(endOfCalendar, 'day')) {
                 const dayCell = document.createElement('div');
@@ -1029,18 +1290,21 @@
                 `;
 
                 if (isCurrentMonth) {
-                    dayCell.addEventListener('click', () => {
+                    dayCell.addEventListener('click', (e) => handleTouchEvent(e, () => {
                         monthlyCalendar.querySelectorAll('.day-cell.selected').forEach(cell => {
                             cell.classList.remove('selected');
                         });
                         dayCell.classList.add('selected');
                         loadDailySchedule(dateString);
-                    });
+                    }));
                 }
 
                 monthlyCalendar.appendChild(dayCell);
+                cellCount++;
                 current.add(1, 'day');
             }
+
+            console.log('Rendered', cellCount, 'calendar cells');
         }
 
         function getCountClass(count) {
@@ -1070,12 +1334,13 @@
             let html = '';
 
             appointmentsByDoctor.forEach(doctorData => {
+                const doctorName = doctorData.doctor_name.length > 20 ? doctorData.doctor_name.substring(0, 17) + '...' : doctorData.doctor_name;
                 html += `
                     <div class="doctor-card">
                         <div class="doctor-card-summary" data-doctor="${doctorData.doctor_name}">
                             <span>
                                 <i class="fas fa-user-md"></i>
-                                ${doctorData.doctor_name} (${doctorData.specialization}) - Total Appointments: ${doctorData.total}
+                                ${doctorName} (${doctorData.specialization}) - Total: ${doctorData.total}
                             </span>
                             <span class="toggle-icon">
                                 <i class="fas fa-chevron-down"></i>
@@ -1083,7 +1348,10 @@
                         </div>
                         <div class="doctor-appointments">
                             <ul>
-                                ${doctorData.appointments.map(apt => `
+                                ${doctorData.appointments.map(apt => {
+                                    const patientName = apt.patient.length > 20 ? apt.patient.substring(0, 17) + '...' : apt.patient;
+                                    const details = apt.details.length > 30 ? apt.details.substring(0, 27) + '...' : apt.details;
+                                    return `
                                     <li>
                                         <span class="appointment-time">
                                             <i class="far fa-clock"></i>
@@ -1091,13 +1359,13 @@
                                         </span>
                                         <span class="appointment-details">
                                             <i class="fas fa-user"></i>
-                                            ${apt.patient} (${apt.details})
+                                            ${patientName} (${details})
                                         </span>
                                         <span class="appointment-status status-${apt.status.toLowerCase()}">
                                             ${apt.status}
                                         </span>
                                     </li>
-                                `).join('')}
+                                `}).join('')}
                             </ul>
                         </div>
                     </div>
@@ -1107,9 +1375,9 @@
             dailyScheduleContent.innerHTML = html;
 
             dailyScheduleContent.querySelectorAll('.doctor-card-summary').forEach(summary => {
-                summary.addEventListener('click', function() {
-                    const appointmentsDiv = this.parentElement.querySelector('.doctor-appointments');
-                    const toggleIcon = this.querySelector('.toggle-icon i');
+                summary.addEventListener('click', (e) => handleTouchEvent(e, () => {
+                    const appointmentsDiv = summary.parentElement.querySelector('.doctor-appointments');
+                    const toggleIcon = summary.querySelector('.toggle-icon i');
 
                     if (appointmentsDiv.style.display === 'block') {
                         appointmentsDiv.style.display = 'none';
@@ -1118,7 +1386,7 @@
                         appointmentsDiv.style.display = 'block';
                         toggleIcon.className = 'fas fa-chevron-up';
                     }
-                });
+                }));
             });
         }
 

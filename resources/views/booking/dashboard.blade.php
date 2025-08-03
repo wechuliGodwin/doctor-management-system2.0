@@ -141,8 +141,8 @@
 </style>
 <div class="row">
     @php
-    // Get the user's hospital branch
-    $userBranch = Auth::guard('booking')->user()->hospital_branch;
+    $user = Auth::guard('booking')->user();
+    $selectedBranch = session('selected_branch', $user->hospital_branch);
     @endphp
 
     @foreach ([
@@ -156,8 +156,7 @@
     'rescheduled' => ['Rescheduled Appointments', 'success']
     ] as $status => [$label, $color])
     @if ($status === 'external_pending' || $status === 'external_approved')
-    {{-- Only show external widgets for 'kijabe' branch --}}
-    @if ($userBranch === 'kijabe')
+    @if ($selectedBranch === 'kijabe')
     <div class="col-md-3 col-6 mb-3">
         <div class="widget small-widget">
             <h3>{{ $label }}</h3>

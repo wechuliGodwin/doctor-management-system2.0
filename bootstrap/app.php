@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'superadmin' => \App\Http\Middleware\SuperadminMiddleware::class,
             'adminOrSuperadmin' => \App\Http\Middleware\AdminOrSuperadminMiddleware::class,
             'check.branch.write' => \App\Http\Middleware\CheckBranchWritePermission::class,
+            'ensure.valid.branch' => \App\Http\Middleware\EnsureValidBranch::class,
             // Other middleware aliases
         ]);
     })
