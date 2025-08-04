@@ -480,13 +480,23 @@
         }
 
         @keyframes moveWave {
-            0% { transform: translateX(-50%); }
-            100% { transform: translateX(0%); }
+            0% {
+                transform: translateX(-50%);
+            }
+
+            100% {
+                transform: translateX(0%);
+            }
         }
 
         @keyframes moveDot {
-            0% { transform: translateX(-100px) translateY(-50%); }
-            100% { transform: translateX(0) translateY(-50%); }
+            0% {
+                transform: translateX(-100px) translateY(-50%);
+            }
+
+            100% {
+                transform: translateX(0) translateY(-50%);
+            }
         }
 
         @media (max-width: 768px) {
@@ -759,7 +769,7 @@
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-calendar-alt"></i>
                     <span class="menu-text">Appointments</span>
-                   <i class="fas fa-ellipsis-h"></i>
+                    <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li>
@@ -829,7 +839,7 @@
                 <a href="javascript:void(0)" class="submenu-toggle">
                     <i class="fas fa-hospital-alt"></i>
                     <span class="menu-text">Satelites</span>
-                   <i class="fas fa-ellipsis-h"></i>
+                    <i class="fas fa-ellipsis-h"></i>
                 </a>
                 <ul class="submenu">
                     <li>
@@ -1070,18 +1080,28 @@
                 tableResponsive.classList.add('loaded');
             }
 
-            document.querySelectorAll('form').forEach(form => {
-                form.addEventListener('submit', function() {
-                    console.log('Loader: Showing for form submission');
+            const exportForm = document.getElementById('export-form');
+            if (exportForm) {
+                exportForm.addEventListener('submit', function(e) {
+                    // Prevent the default form submission for a moment
+                    e.preventDefault();
+
+                    // Show the loader immediately
                     if (loaderOverlay) {
                         loaderOverlay.classList.add('active');
-                        sessionStorage.setItem('loaderActive', 'true');
                     }
-                    if (tableResponsive) {
-                        tableResponsive.classList.remove('loaded');
-                    }
+
+                    // Manually submit the form to initiate the download
+                    this.submit();
+
+                    setTimeout(function() {
+                        if (loaderOverlay) {
+                            loaderOverlay.classList.remove('active');
+                            sessionStorage.removeItem('loaderActive');
+                        }
+                    }, 2000); // 2-second delay
                 });
-            });
+            }
 
             window.addEventListener('beforeunload', function() {
                 const loaderOverlay = document.getElementById('loaderOverlay');

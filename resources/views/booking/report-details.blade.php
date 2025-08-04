@@ -374,7 +374,7 @@
                         <option value="new" {{ $bookingType === 'new' ? 'selected' : '' }}>New Patients</option>
                         <option value="review" {{ $bookingType === 'review' ? 'selected' : '' }}>Review Patients</option>
                         <option value="post_op" {{ $bookingType === 'post_op' ? 'selected' : '' }}>Post-Op Patients</option>
-                        @if ($isSuperadmin ||  Auth::guard('booking')->user()->hospital_branch === 'kijabe')
+                        @if ($isSuperadmin && (!$selectedBranch || $selectedBranch === 'kijabe') || Auth::guard('booking')->user()->hospital_branch === 'kijabe')
                         <option value="external_approved" {{ $bookingType === 'external_approved' ? 'selected' : '' }}>External Approved </option>
                         <option value="external_pending" {{ $bookingType === 'external_pending' ? 'selected' : '' }}>Pending External</option>
                         @endif
@@ -439,8 +439,8 @@
                 </p>
             </div>
 
-            <div class="relative">
-                <form id="exportForm" action="{{ route('booking.detailed-report') }}" method="GET">
+            <div>
+                <form id="export-form" action="{{ route('booking.detailed-report') }}" method="GET">
                     @csrf
                     <input type="hidden" name="time_period" value="{{ $timePeriod }}">
                     <input type="hidden" name="start_date" value="{{ $startDate }}">
@@ -452,17 +452,11 @@
                     <input type="hidden" name="booking_type" value="{{ $bookingType }}">
                     <input type="hidden" name="tracing_status" value="{{ $tracingStatus }}">
                     <input type="hidden" name="export_csv" value="1">
-                    <button type="submit" id="exportCsvButton" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                         </svg>
                         Export CSV
-                        <div id="loader" class="hidden absolute inset-0 flex items-center justify-center bg-blue-600 bg-opacity-75 rounded-lg">
-                            <svg class="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        </div>
                     </button>
                 </form>
             </div>
@@ -530,93 +524,6 @@
             </div>
         </div>
     </div>
-    <!-- 
-    <div class="report-card">
-        <h3 class="report-title">Report Summary</h3>
-        <div class="filter-summary">
-            <div class="filter-item">
-                <p>Total Appointments</p>
-                <p>{{ data_get($totals, 'total_appointments', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Confirmed (Pending)</p>
-                <p>{{ data_get($totals, 'confirmed_pending', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Patients Seen</p>
-                <p>{{ data_get($totals, 'patients_seen', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Missed</p>
-                <p>{{ data_get($totals, 'missed', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Cancelled</p>
-                <p>{{ data_get($totals, 'cancelled', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Rescheduled</p>
-                <p>{{ data_get($totals, 'rescheduled', 0) }}</p>
-            </div>
-            @if ($isSuperadmin || Auth::guard('booking')->user()->hospital_branch === 'kijabe')
-            <div class="filter-item">
-                <p>Pending External Approvals</p>
-                <p>{{ data_get($totals, 'pending_external_approvals', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>External Approved</p>
-                <p>{{ data_get($totals, 'external_approved', 0) }}</p>
-            </div>
-            @endif
-            <div class="filter-item">
-                <p>Archived</p>
-                <p>{{ data_get($totals, 'archived', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>New Patients</p>
-                <p>{{ data_get($totals, 'new_count', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Review</p>
-                <p>{{ data_get($totals, 'review_count', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Post-Op</p>
-                <p>{{ data_get($totals, 'postop_count', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Traced (Contacted)</p>
-                <p>{{ data_get($totals, 'traced_contacted', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Traced (No Response)</p>
-                <p>{{ data_get($totals, 'traced_not_contacted', 0) }}</p>
-            </div>
-            <div class="filter-item">
-                <p>Traced (Other)</p>
-                <p>{{ data_get($totals, 'traced_other', 0) }}</p>
-            </div>
-        </div>
-    </div> -->
-
-    @if ($isSuperadmin)
-    <div class="report-card">
-        <h3 class="report-title">Branch-wise Summary</h3>
-        @if ($branchData->isEmpty())
-        <div class="no-data-message">No branch-wise data available for the selected filters.</div>
-        @else
-        <div class="filter-summary">
-            @foreach ($branchData as $branch)
-            <div class="filter-item">
-                <p>{{ ucfirst(data_get($branch, 'hospital_branch', 'Unknown')) }}</p>
-                <p>{{ data_get($branch, 'total_bookings', 0) }} Bookings</p>
-            </div>
-            @endforeach
-        </div>
-        @endif
-    </div>
-    @endif
-
     @if (empty($appointments))
     <div class="no-data-message">No appointments found for the selected filters.</div>
     @else

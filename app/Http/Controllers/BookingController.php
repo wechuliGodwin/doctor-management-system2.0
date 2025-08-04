@@ -1051,10 +1051,13 @@ class BookingController extends Controller
 
             if ($bookingType && in_array($bookingType, ['new', 'review', 'post_op'])) {
                 $internalQuery->where('bk_appointments.booking_type', $bookingType)
-                    ->where('bk_appointments.appointment_status', '!=', 'rescheduled')
-                    ->where('bk_appointments.appointment_status', '!=', 'cancelled');
+                    ->whereNotIn('bk_appointments.appointment_status', ['rescheduled', 'cancelled']);
+                    Log::info('Excluding rescheduled and cancelled appointments for booking type', ['booking_type' => $bookingType]);
             } elseif ($bookingType && in_array($bookingType, ['external_approved', 'external_pending'])) {
                 $internalQuery->whereRaw('1 = 0'); // Exclude internal appointments for external booking types
+            } elseif ($status === 'all') {
+                $internalQuery->whereNotIn('bk_appointments.appointment_status', ['rescheduled', 'cancelled']);
+                Log::info('Excluding rescheduled and cancelled appointments for status "all"');
             }
 
             if ($selectedBranch) {
@@ -1097,7 +1100,7 @@ class BookingController extends Controller
         }
 
         // External approved appointments
-        if (($status === 'all' || $status === 'external_approved' || $status === 'patients_seen' || $bookingType === 'external_approved') && ($isSuperadmin || $userBranch === 'kijabe')) {
+        if (($status === 'all' || $status === 'external_approved' || $status === 'patients_seen' || $bookingType === 'external_approved') && ($isSuperadmin && $selectedBranch === 'kijabe' || $userBranch === 'kijabe')) {
             $approvedQuery = ExternalApproved::query()
                 ->select([
                     'external_approveds.id',
@@ -1180,7 +1183,7 @@ class BookingController extends Controller
         }
 
         // External pending approvals
-        if (($status === 'all' || $status === 'external_pending' || $bookingType === 'external_pending') && ($isSuperadmin || $userBranch === 'kijabe')) {
+        if (($status === 'all' || $status === 'external_pending' || $bookingType === 'external_pending') && ($isSuperadmin && $selectedBranch === 'kijabe' || $userBranch === 'kijabe')) {
             $pendingQuery = ExternalPendingApproval::query()
                 ->select([
                     'external_pending_approvals.id',
@@ -1242,7 +1245,7 @@ class BookingController extends Controller
         }
 
         // Cancelled appointments
-        if ($status === 'all' || $status === 'cancelled') {
+        if ($status === 'cancelled') {
             $cancelledQuery = CancelledAppointment::query()
                 ->select([
                     'cancelled_appointments.id',
@@ -1320,7 +1323,7 @@ class BookingController extends Controller
         }
 
         // Rescheduled appointments
-        if ($status === 'all' || $status === 'rescheduled') {
+        if ($status === 'rescheduled') {
             $rescheduledQuery = DB::table('bk_rescheduled_appointments as a')
                 ->join('bk_appointments as b', 'a.appointment_id', '=', 'b.id')
                 ->join('bk_appointments as c', 'a.re_appointment_id', '=', 'c.id')
@@ -1821,18 +1824,27 @@ class BookingController extends Controller
                 'missed' => $baseQuery->clone()->where('bk_appointments.appointment_status', 'missed')->count() +
                     ($bookingType === 'external_approved' || $status === 'all' || $status === 'external_approved' || $status === 'patients_seen' ?
                         $externalApprovedQuery->clone()->where('external_approveds.appointment_status', 'missed')->count() : 0),
-                'cancelled' => $status === 'all' || $status === 'cancelled' ? $cancelledQuery->clone()->count() : 0,
-                'rescheduled' => $status === 'all' || $status === 'rescheduled' ? $rescheduledQuery->clone()->count() : 0,
-                'pending_external_approvals' => $bookingType === 'external_pending' || $status === 'all' || $status === 'external_pending' ?
+                'cancelled' =>$status === 'cancelled' ? $cancelledQuery->clone()->count() : 0,//only count cancelled if status is 'cancelled'
+                'rescheduled' =>$status === 'rescheduled' ? $rescheduledQuery->clone()->count() : 0,//only count rescheduled if status is 'rescheduled'
+                'pending_external_approvals' => ($bookingType === 'external_pending' || $status === 'all' || $status === 'external_pending') && ($isSuperadmin && $selectedBranch === 'kijabe' || $userBranch === 'kijabe') ?
                     $pendingExternalQuery->clone()->count() : 0,
-                'external_approved' => $bookingType === 'external_approved' || $status === 'all' || $status === 'external_approved' || $status === 'patients_seen' ?
+                'external_approved' => ($bookingType === 'external_approved' || $status === 'all' || $status === 'external_approved' || $status === 'patients_seen') && ($isSuperadmin && $selectedBranch === 'kijabe' || $userBranch === 'kijabe') ?
                     $externalApprovedQuery->clone()->count() : 0,
                 'archived' => $baseQuery->clone()->where('bk_appointments.appointment_status', 'archived')->count() +
                     ($bookingType === 'external_approved' || $status === 'all' || $status === 'external_approved' || $status === 'patients_seen' ?
                         $externalApprovedQuery->clone()->where('external_approveds.appointment_status', 'archived')->count() : 0),
-                'new_count' => $baseQuery->clone()->where('bk_appointments.booking_type', 'new')->where('bk_appointments.appointment_status', '!=', 'rescheduled')->count(),
-                'review_count' => $baseQuery->clone()->where('bk_appointments.booking_type', 'review')->where('bk_appointments.appointment_status', '!=', 'rescheduled')->count(),
-                'postop_count' => $baseQuery->clone()->where('bk_appointments.booking_type', 'post_op')->where('bk_appointments.appointment_status', '!=', 'rescheduled')->count(),
+                'new_count' => $baseQuery->clone()
+                    ->where('bk_appointments.booking_type', 'new')
+                    ->whereNotIn('bk_appointments.appointment_status', ['rescheduled', 'cancelled'])
+                    ->count(),
+                'review_count' => $baseQuery->clone()
+                    ->where('bk_appointments.booking_type', 'review')
+                    ->whereNotIn('bk_appointments.appointment_status', ['rescheduled', 'cancelled'])
+                    ->count(),
+                'postop_count' => $baseQuery->clone()
+                    ->where('bk_appointments.booking_type', 'post_op')
+                    ->whereNotIn('bk_appointments.appointment_status', ['rescheduled', 'cancelled'])
+                    ->count(),
                 'traced_contacted' => $baseQuery->clone()->whereExists(function ($query) {
                     $query->select(DB::raw(1))
                         ->from('bk_tracing')
